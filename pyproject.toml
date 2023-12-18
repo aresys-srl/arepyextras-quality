@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arepyextras-quality"
+description = "ArePyExtras Quality is the Aresys Python module for SAR products quality analysis."
+authors = [{ name = "Aresys S.R.L.", email = "info@aresys.it" }]
+license = { text = "MIT" }
+classifiers = [
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: MIT License",
+]
+requires-python = ">= 3.9"
+dependencies = [
+    "jsonschema",
+    "toml",
+    "netCDF4",
+    "appdirs",
+    "xmltodict",
+    "arepytools >= 1.6.1",
+    "scipy",
+    "numpy >= 1.20",
+    "pandas >= 1.4.0",
+    "art"
+    ]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+cli = ['click']
+graphs = ['matplotlib >= 3.5', 'plotly >= 5.10', 'seaborn']
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[tool.setuptools]
+license-files = ["LICENSE.txt"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests*"]
+namespaces = true
+
+[tool.setuptools.dynamic]
+version = { attr = "arepyextras.quality.__version__" }
