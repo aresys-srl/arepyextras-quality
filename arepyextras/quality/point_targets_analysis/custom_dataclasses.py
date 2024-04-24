@@ -6,18 +6,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from pathlib import Path
 from typing import Union
 
 import numpy as np
-import toml
 from arepytools.timing.precisedatetime import PreciseDateTime
 
 from arepyextras.quality.core.generic_dataclasses import (
-    MaskingMethod,
     SAROrbitDirection,
     SARPolarization,
-    convert_to_enum_field,
 )
 
 
@@ -127,148 +123,6 @@ class RCSDataOutput:
 
 
 @dataclass
-class IRFParameters:
-    """IRF analysis detailed setup parameters"""
-
-    peak_finding_roi_size: tuple[int, int] = (33, 33)
-    analysis_roi_size: tuple[int, int] = (128, 128)
-    oversampling_factor: int = 16
-    zero_doppler_abs_squint_threshold_deg: float = 1.0
-    masking_method: MaskingMethod = MaskingMethod.PEAK
-
-    @staticmethod
-    def from_dict(arg: dict) -> IRFParameters:
-        """Creating a IRFParameters object by conversion from a dictionary.
-
-        Args:
-            arg (dict): dictionary with keys equal to the IRFParameters ones
-
-        Returns:
-            IRFParameters: IRFParameters object
-        """
-        irf_obj = IRFParameters()
-        for fld in fields(irf_obj):
-            if fld.name in arg.keys():
-                if fld.name == "masking_method":
-                    setattr(irf_obj, fld.name, convert_to_enum_field(arg[fld.name], enum_type=MaskingMethod))
-                elif isinstance(arg[fld.name], list):
-                    setattr(irf_obj, fld.name, tuple(arg[fld.name]))
-                else:
-                    setattr(irf_obj, fld.name, arg[fld.name])
-
-        return irf_obj
-
-
-@dataclass
-class RCSParameters:
-    """RCS analysis detailed setup parameters"""
-
-    interpolation_factor: int = 8
-    roi_dimension: int = 128
-    calibration_factor: float = 1.0
-    resampling_factor: float = 1.0
-
-    @staticmethod
-    def from_dict(arg: dict) -> RCSParameters:
-        """Creating a RCSParameters object by conversion from a dictionary.
-
-        Args:
-            arg (dict): dictionary with keys equal to the RCSParameters ones
-
-        Returns:
-            RCSParameters: RCSParameters object
-        """
-        rcs_obj = RCSParameters()
-        for fld in fields(rcs_obj):
-            if fld.name in arg.keys():
-                if isinstance(arg[fld.name], list):
-                    setattr(rcs_obj, fld.name, tuple(arg[fld.name]))
-                else:
-                    setattr(rcs_obj, fld.name, arg[fld.name])
-
-        return rcs_obj
-
-
-@dataclass
-class PointTargetAnalysisConfig:
-    """Dataclass to manage, enable and customize different part of the Point Target Analysis procedure"""
-
-    perform_irf: bool = True
-    perform_rcs: bool = True
-    evaluate_pslr: bool = True
-    evaluate_islr: bool = True
-    evaluate_sslr: bool = True
-    evaluate_localization: bool = True
-    generate_static_graphs: bool = True
-    generate_interactive_graphs: bool = False
-    irf_parameters: IRFParameters = field(default_factory=IRFParameters)
-    rcs_parameters: RCSParameters = field(default_factory=RCSParameters)
-
-    @staticmethod
-    def from_toml(toml_file: Path) -> PointTargetAnalysisConfig:
-        """Generating an PointTargetAnalysisConfig dataclass from a configuration toml file.
-
-        Parameters
-        ----------
-        arg : Path
-            path to the toml file
-
-        Returns
-        -------
-        PointTargetAnalysisConfig
-            output dataclass
-
-        Raises
-        ------
-        ValueError
-            if input toml is not valid, this error is raised
-        """
-
-        # loading toml file
-        with open(toml_file, "r", encoding="UTF-8") as f_in:
-            config = toml.load(f_in)
-
-        # accessing each field of the dictionary and storing its values in a new dataclass
-        config = config["point_target_analysis"]
-        try:
-            out = PointTargetAnalysisConfig.from_dict(config)
-
-            return out
-
-        except Exception as err:
-            raise ValueError("Invalid toml file.") from err
-
-    @staticmethod
-    def from_dict(arg: dict) -> PointTargetAnalysisConfig:
-        """Creating a PointTargetAnalysisConfig object by conversion from a dictionary.
-
-        Args:
-            arg (dict): dictionary with keys equal to the PointTargetAnalysisConfig ones
-
-        Returns:
-            PointTargetAnalysisConfig: PointTargetAnalysisConfig object
-        """
-        pta_obj = PointTargetAnalysisConfig()
-        dict_in = arg.copy()
-
-        try:
-            if "irf_parameters" in dict_in:
-                pta_obj.irf_parameters = IRFParameters.from_dict(dict_in.pop("irf_parameters"))
-            if "rcs_parameters" in dict_in:
-                pta_obj.rcs_parameters = RCSParameters.from_dict(dict_in.pop("rcs_parameters"))
-
-            dtc_fields = [f.name for f in fields(pta_obj)]
-            for key, value in dict_in.items():
-                if key in dtc_fields:
-                    setattr(pta_obj, key, value)
-
-            return pta_obj
-
-        except Exception as err:
-            raise ValueError("Invalid dictionary structure.") from err
-
-
-@dataclass
 class GenericInfoOutput:
     """Dataclass to collect generic output for the whole Point Target Analysis"""
 
@@ -288,6 +142,9 @@ class PTAdditionalInfo:
 
     orbit_direction: SAROrbitDirection = None  # sensor orbit direction
     peak_azimuth_time: PreciseDateTime = None  # azimuth time at signal peak coordinates
+    peak_azimuth_from_burst_start: float = (
+        None  # azimuth pixel position at signal peak coordinates relative to burst start
+    )
     peak_range_time: float = None  # range time at signal peak coordinates
     look_angle: float = None  # look angle at nominal target coordinates
     ground_velocity: float = None  # ground velocity at nominal target coordinates

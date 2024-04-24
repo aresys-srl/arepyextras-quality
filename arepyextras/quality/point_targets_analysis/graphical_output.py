@@ -16,7 +16,7 @@ import arepyextras.quality.point_targets_analysis.custom_dataclasses as ptdt
 from arepyextras.quality.core.signal_processing import convert_to_db
 
 
-def irf_parameters(data_graph: ptdt.IRFGraphDataOutput, data_values: dict, label: str, out_dir: Path) -> None:
+def irf_graphs(data_graph: ptdt.IRFGraphDataOutput, data_values: dict, label: str, out_dir: Path) -> None:
     """Function to generate the graphical output after IRF analysis.
 
     Parameters
@@ -45,7 +45,7 @@ def irf_parameters(data_graph: ptdt.IRFGraphDataOutput, data_values: dict, label
 
     rng_ax_m = data_graph.rng_axis * data_graph.rng_step_distance
     az_ax_m = data_graph.az_axis * data_graph.az_step_distance
-    image_db = convert_to_db(np.abs(data_graph.image), mode=gdt.DecibelConversion.POWER)
+    image_db = convert_to_db(np.abs(data_graph.image), mode=gdt.DecibelConversion.AMPLITUDE)
 
     # 1st plot: interpolated irf target area
     axes_ratio = az_ax_m.max() / rng_ax_m.max()
@@ -121,7 +121,7 @@ def irf_parameters(data_graph: ptdt.IRFGraphDataOutput, data_values: dict, label
             cell.set_text_props(fontproperties=FontProperties(weight="bold"))
 
     # 4th plot: range profile
-    prof = convert_to_db(np.abs(data_graph.rng_profile), mode=gdt.DecibelConversion.POWER)
+    prof = convert_to_db(np.abs(data_graph.rng_profile), mode=gdt.DecibelConversion.AMPLITUDE)
 
     if np.abs(lobe_rng * data_graph.image.shape[1] / data_graph.image.shape[0]) > 1:
         ax4.plot(rng_ax_m, prof)
@@ -160,7 +160,7 @@ def irf_parameters(data_graph: ptdt.IRFGraphDataOutput, data_values: dict, label
     ax4.set_ylabel("Power [dB]", fontweight="bold")
 
     # 5th plot: azimuth profile
-    prof = convert_to_db(np.abs(data_graph.az_profile), mode=gdt.DecibelConversion.POWER)
+    prof = convert_to_db(np.abs(data_graph.az_profile), mode=gdt.DecibelConversion.AMPLITUDE)
 
     if np.abs(lobe_az * data_graph.image.shape[1] / data_graph.image.shape[0]) > 1:
         # with sidelobe dirs
@@ -207,7 +207,7 @@ def irf_parameters(data_graph: ptdt.IRFGraphDataOutput, data_values: dict, label
     plt.close("all")
 
 
-def rcs_parameters(data_graph: ptdt.RCSGraphDataOutput, label: str, out_dir: Path) -> None:
+def rcs_graphs(data_graph: ptdt.RCSGraphDataOutput, label: str, out_dir: Path) -> None:
     """Function to generate the graphical output after RCS analysis.
 
     Parameters
@@ -228,7 +228,7 @@ def rcs_parameters(data_graph: ptdt.RCSGraphDataOutput, label: str, out_dir: Pat
     if data_graph.data_type == gdt.TargetDataType.DETECTED:
         im_db = convert_to_db(np.abs(data_graph.image))
     else:
-        im_db = convert_to_db(np.abs(data_graph.image), mode=gdt.DecibelConversion.POWER)
+        im_db = convert_to_db(np.abs(data_graph.image), mode=gdt.DecibelConversion.AMPLITUDE)
 
     axes_ratio = az_axis.max() / rng_axis.max()
     extent = [az_axis[0], az_axis[-1], rng_axis[-1], rng_axis[0]]
@@ -326,11 +326,11 @@ def interactive_graphs(
 
     rng_ax_m = irf_data_graph.rng_axis * irf_data_graph.rng_step_distance
     az_ax_m = irf_data_graph.az_axis * irf_data_graph.az_step_distance
-    image_db = convert_to_db(np.abs(irf_data_graph.image), mode=gdt.DecibelConversion.POWER)
+    image_db = convert_to_db(np.abs(irf_data_graph.image), mode=gdt.DecibelConversion.AMPLITUDE)
     extent = [az_ax_m[0], az_ax_m[-1], rng_ax_m[-1], rng_ax_m[0]]
 
-    rng_prof = convert_to_db(np.abs(irf_data_graph.rng_profile), mode=gdt.DecibelConversion.POWER).squeeze()
-    az_prof = convert_to_db(np.abs(irf_data_graph.az_profile), mode=gdt.DecibelConversion.POWER).squeeze()
+    rng_prof = convert_to_db(np.abs(irf_data_graph.rng_profile), mode=gdt.DecibelConversion.AMPLITUDE).squeeze()
+    az_prof = convert_to_db(np.abs(irf_data_graph.az_profile), mode=gdt.DecibelConversion.AMPLITUDE).squeeze()
 
     # first subplot: IRF
     # interpolated image
@@ -559,7 +559,7 @@ def interactive_graphs(
     if rcs_data_graph.data_type == gdt.TargetDataType.DETECTED:
         image_db = convert_to_db(np.abs(rcs_data_graph.image))
     else:
-        image_db = convert_to_db(np.abs(rcs_data_graph.image), mode=gdt.DecibelConversion.POWER)
+        image_db = convert_to_db(np.abs(rcs_data_graph.image), mode=gdt.DecibelConversion.AMPLITUDE)
 
     extent = [az_axis[0], az_axis[-1], rng_axis[-1], rng_axis[0]]
 

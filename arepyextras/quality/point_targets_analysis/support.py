@@ -151,7 +151,7 @@ def compute_side_lobes_directions(
         wavelength=1,
     )
 
-    if channel_data.boresight_normal_curve is None and channel_data.doppler_centroid_polynomial is None:
+    if channel_data.boresight_normal_curve is None and channel_data.doppler_centroid is None:
         # no attitude or doppler centroid provided, returning zero doppler condition
         return np.array([np.inf, 0]), 0, 0
 
@@ -172,9 +172,9 @@ def compute_side_lobes_directions(
             channel_data=channel_data, azimuth_time=sensor_time_with_doppler, ground_point=earth_point_zero_doppler
         )
 
-    elif channel_data.doppler_centroid_polynomial is not None:
+    elif channel_data.doppler_centroid is not None:
         # computing side lobes with doppler
-        doppler_centroid = channel_data.doppler_centroid_polynomial.evaluate(
+        doppler_centroid = channel_data.doppler_centroid.evaluate(
             azimuth_time=peak_azimuth_time, range_time=peak_range_time
         )
         sensor_time_with_doppler = inverse_geocoding_monostatic_core(

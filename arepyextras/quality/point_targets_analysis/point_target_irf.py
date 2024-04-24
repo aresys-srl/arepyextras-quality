@@ -549,44 +549,63 @@ class PointTargetIRFAnalysis:
 
         # PSLR, ISLR, SSLR: evaluation of specified quantities in decibel
         if pslr_flag:
-            pslr = self.compute_pslr_2d(
-                data=target_area_rc_interp,
-                resolution=(rng_res, az_res),
-                interp_factor=self.oversampling_factor,
-                mask=self.mask_method,
-                side_lobes_directions=self.side_lobes_directions,
-            )
-            # storing results
-            results.range_pslr = pslr[0]
-            results.azimuth_pslr = pslr[1]
-            results.pslr_2d = pslr[2]
+            try:
+                pslr = self.compute_pslr_2d(
+                    data=target_area_rc_interp,
+                    resolution=(rng_res, az_res),
+                    interp_factor=self.oversampling_factor,
+                    mask=self.mask_method,
+                    side_lobes_directions=self.side_lobes_directions,
+                )
+                # storing results
+                results.range_pslr = pslr[0]
+                results.azimuth_pslr = pslr[1]
+                results.pslr_2d = pslr[2]
+            except Exception:
+                log.error("Could not evaluate PSLR properly.")
+                results.range_pslr = np.nan
+                results.azimuth_pslr = np.nan
+                results.pslr_2d = np.nan
+
         else:
             log.info("PSLR computation has been disabled in configuration file.")
         if islr_flag:
-            islr = self.compute_islr_2d(
-                data=target_area_rc_interp,
-                resolution=(rng_res, az_res),
-                interp_factor=self.oversampling_factor,
-                mask=self.mask_method,
-                side_lobes_directions=self.side_lobes_directions,
-            )
-            # storing results
-            results.range_islr = islr[0]
-            results.azimuth_islr = islr[1]
-            results.islr_2d = islr[2]
+            try:
+                islr = self.compute_islr_2d(
+                    data=target_area_rc_interp,
+                    resolution=(rng_res, az_res),
+                    interp_factor=self.oversampling_factor,
+                    mask=self.mask_method,
+                    side_lobes_directions=self.side_lobes_directions,
+                )
+                # storing results
+                results.range_islr = islr[0]
+                results.azimuth_islr = islr[1]
+                results.islr_2d = islr[2]
+            except Exception:
+                log.error("Could not evaluate ISLR properly.")
+                results.range_islr = np.nan
+                results.azimuth_islr = np.nan
+                results.islr_2d = np.nan
         else:
             log.info("ISLR computation has been disabled in configuration file.")
         if sslr_flag:
-            sslr = self.compute_sslr_2d(
-                data=target_area_rc_interp,
-                resolution=(rng_res, az_res),
-                interp_factor=self.oversampling_factor,
-                side_lobes_directions=self.side_lobes_directions,
-            )
-            # storing results
-            results.range_sslr = sslr[0]
-            results.azimuth_sslr = sslr[1]
-            results.sslr_2d = sslr[2]
+            try:
+                sslr = self.compute_sslr_2d(
+                    data=target_area_rc_interp,
+                    resolution=(rng_res, az_res),
+                    interp_factor=self.oversampling_factor,
+                    side_lobes_directions=self.side_lobes_directions,
+                )
+                # storing results
+                results.range_sslr = sslr[0]
+                results.azimuth_sslr = sslr[1]
+                results.sslr_2d = sslr[2]
+            except Exception:
+                log.error("Could not evaluate SSLR properly.")
+                results.range_sslr = np.nan
+                results.azimuth_sslr = np.nan
+                results.sslr_2d = np.nan
         else:
             log.info("SSLR computation has been disabled in configuration file.")
 

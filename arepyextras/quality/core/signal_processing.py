@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore", message="divide by zero encountered in log10")
 
 
 def convert_to_db(
-    data: Union[np.ndarray, float], mode: DecibelConversion = DecibelConversion.INTENSITY
+    data: Union[np.ndarray, float], mode: DecibelConversion = DecibelConversion.POWER
 ) -> Union[np.ndarray, float]:
     """Converting input data to decibel.
 
@@ -32,7 +32,8 @@ def convert_to_db(
     data : Union[np.ndarray, float]
         input array or float
     mode : DecibelConversion, optional
-        decibel conversion multiplying mode, by default DecibelConversion.INTENSITY
+        if input data is already in power (abs(data)^2) use DecibelConversion.POWER (factor 10), else use
+        DecibelConversion.AMPLITUDE if input data is just (abs(data)), by default DecibelConversion.POWER
 
     Returns
     -------
@@ -42,7 +43,7 @@ def convert_to_db(
 
     # setting the multiplying factor value
     factor = 10  # intensity is the default value
-    if mode == DecibelConversion.POWER:
+    if mode == DecibelConversion.AMPLITUDE:
         factor = 20
 
     # correcting decibel of 0 values to nan
@@ -998,8 +999,8 @@ def crop_array_2d(
 def radiometric_correction(
     data: np.ndarray,
     incidence_angle: np.ndarray,
-    input_type: SARRadiometricQuantity,
-    output_type: SARRadiometricQuantity,
+    input_quantity: SARRadiometricQuantity,
+    output_quantity: SARRadiometricQuantity,
     exp_power: float = 0.5,
 ) -> np.ndarray:
     """Data radiometric correction based on data acquisition type and desired output type, choosing between Beta, Sigma
@@ -1008,51 +1009,55 @@ def radiometric_correction(
     Parameters
     ----------
     data : np.ndarray
-        input array whose data need to be converted from a type to another
+        input array whose data need to be converted from a type to another, array should be in the form (samples, lines)
     incidence_angle : np.ndarray
-        incidence angle array of the same shape of the data
-    input_type : SARRadiometricQuantity
-        input radiometric type
-    output_type : SARRadiometricQuantity
-        output radiometric type
+        incidence angle array, same size as range axis of input data or same data size, in the format (n_rng,) or (n_rng, n_az)
+    input_quantity : SARRadiometricQuantity
+        input radiometric quantity
+    output_quantity : SARRadiometricQuantity
+        output radiometric quantity
     exp_power : float, optional
         exponential power correction in computing different radiometric corrections, by default 0.5
 
     Returns
     -------
     np.ndarray
-        corrected data array
+        corrected data array, in the form (samples, lines)
 
     Raises
     ------
     ValueError
-        input_type and output_type not of the proper enum type
+        input_quantity and output_quantity not of the proper enum type
     ValueError
         data and incidence_angle do not have the same shape
     """
 
-    if (not isinstance(input_type, SARRadiometricQuantity)) or (not isinstance(output_type, SARRadiometricQuantity)):
-        raise ValueError("Input and output type must be of type RadiometricAnalysisIO")
+    if (not isinstance(input_quantity, SARRadiometricQuantity)) or (
+        not isinstance(output_quantity, SARRadiometricQuantity)
+    ):
+        raise ValueError("Input and output type must be of type SARRadiometricQuantity")
 
-    if data.shape != incidence_angle.shape:
-        raise ValueError("Incidence angle and data must have the same shape")
+    if incidence_angle.ndim == 1:
+        incidence_angle = np.atleast_2d(incidence_angle).T
+    elif data.shape != incidence_angle.shape:
+        raise ValueError(f"Incidence angle shape must be (n_rng,) or input data shape {data.shape}")
 
-    if input_type == SARRadiometricQuantity.BETA_NOUGHT:
-        if output_type == SARRadiometricQuantity.SIGMA_NOUGHT:
+    if input_quantity == SARRadiometricQuantity.BETA_NOUGHT:
+        if output_quantity == SARRadiometricQuantity.SIGMA_NOUGHT:
             out_data = data * (np.sin(incidence_angle) ** exp_power)
-        elif output_type == SARRadiometricQuantity.GAMMA_NOUGHT:
+        elif output_quantity == SARRadiometricQuantity.GAMMA_NOUGHT:
             out_data = data * (np.sin(incidence_angle) ** exp_power) / (np.cos(incidence_angle) ** exp_power)
 
-    elif input_type == SARRadiometricQuantity.SIGMA_NOUGHT:
-        if output_type == SARRadiometricQuantity.BETA_NOUGHT:
+    elif input_quantity == SARRadiometricQuantity.SIGMA_NOUGHT:
+        if output_quantity == SARRadiometricQuantity.BETA_NOUGHT:
             out_data = data / (np.sin(incidence_angle) ** exp_power)
-        elif output_type == SARRadiometricQuantity.GAMMA_NOUGHT:
+        elif output_quantity == SARRadiometricQuantity.GAMMA_NOUGHT:
             out_data = data / (np.cos(incidence_angle) ** exp_power)
 
-    elif input_type == SARRadiometricQuantity.GAMMA_NOUGHT:
-        if output_type == SARRadiometricQuantity.BETA_NOUGHT:
+    elif input_quantity == SARRadiometricQuantity.GAMMA_NOUGHT:
+        if output_quantity == SARRadiometricQuantity.BETA_NOUGHT:
             out_data = data / (np.sin(incidence_angle) ** exp_power) * (np.cos(incidence_angle) ** exp_power)
-        elif output_type == SARRadiometricQuantity.SIGMA_NOUGHT:
+        elif output_quantity == SARRadiometricQuantity.SIGMA_NOUGHT:
             out_data = data * (np.cos(incidence_angle) ** exp_power)
 
     return out_data

@@ -5,8 +5,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Protocol, Union, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -26,23 +25,25 @@ from arepyextras.quality.core.generic_dataclasses import (
 
 
 @runtime_checkable
-class DopplerPolynomial(Protocol):
-    """Protocol to define an object that wraps the Doppler Centroid polynomials"""
+class SARCoordinatesFunction(Protocol):
+    """Protocol to define a function taking SAR coordinates (Azimuth, Range) as inputs and returns a float
+    This can be any generic f: SAR Times -> R.
+    """
 
     def evaluate(self, azimuth_time: PreciseDateTime, range_time: float) -> float:
-        """Evaluate the Doppler Polynomial at given azimuth and range times.
+        """Evaluate the wrapped function at given azimuth and range times.
 
         Parameters
         ----------
         azimuth_time : PreciseDateTime
-            azimuth time at which evaluate the polynomial
+            azimuth time at which evaluate the function
         range_time : float
-            range time at which evaluate the polynomial
+            range time at which evaluate the function
 
         Returns
         -------
         float
-            doppler centroid at that time
+            output of the wrapped function
         """
 
 
@@ -51,23 +52,19 @@ class QualityInputProduct(Protocol):
     """Protocol to define characteristics of input product for quality tool"""
 
     @property
-    def path(self) -> Path:
-        """Get product path"""
-
-    @property
     def name(self) -> str:
         """Get product name"""
 
     @property
-    def channels_list(self) -> Union[list[int], list[str]]:
+    def channels_list(self) -> list[int] | list[str]:
         """Get list of available channels for this product"""
 
-    def get_channel_data(self, channel_id: Union[int, str]) -> ChannelData:
+    def get_channel_data(self, channel_id: int | str) -> ChannelData:
         """Gathering all the information that are channel dependent and storing them in a protocol compliant object.
 
         Parameters
         ----------
-        channel_id : Union[int, str]
+        channel_id : int | str
             selected channel identifier
 
         Returns
@@ -86,7 +83,7 @@ class ChannelData(Protocol):
         """Name of the swath being analyzed"""
 
     @property
-    def channel_id(self) -> Union[int, str]:
+    def channel_id(self) -> int | str:
         """Identifier corresponding to the current channel data"""
 
     @property
@@ -142,15 +139,15 @@ class ChannelData(Protocol):
         """Channel trajectory/orbit"""
 
     @property
-    def boresight_normal_curve(self) -> Union[Generic3DCurve, None]:
+    def boresight_normal_curve(self) -> Generic3DCurve | None:
         """Channel attitude boresight normal 3D curve"""
 
     @property
-    def doppler_centroid_polynomial(self) -> Union[DopplerPolynomial, None]:
+    def doppler_centroid(self) -> SARCoordinatesFunction | None:
         """Channel doppler centroid polynomial wrapper"""
 
     @property
-    def doppler_rate_polynomial(self) -> Union[DopplerPolynomial, None]:
+    def doppler_rate(self) -> SARCoordinatesFunction | None:
         """Channel doppler rate polynomial wrapper"""
 
     @property
@@ -177,12 +174,12 @@ class ChannelData(Protocol):
     def swst_changes(self) -> list[tuple[PreciseDateTime, float]]:
         """SWST changes list as tuple of time of change and new SWST value"""
 
-    def get_mid_burst_times(self, burst: int) -> Union[tuple[PreciseDateTime, float], tuple[None, None]]:
+    def get_mid_burst_times(self, burst: int) -> tuple[PreciseDateTime, float] | tuple[None, None]:
         """Compute mid azimuth and range times for a given burst.
 
         Returns
         -------
-        Union[tuple[PreciseDateTime, float], tuple[None, None]]
+        tuple[PreciseDateTime, float] | tuple[None, None]
             azimuth and range mid burst times, (None, None) if no bursts
         """
 
@@ -245,7 +242,7 @@ class ChannelData(Protocol):
             pixel corresponding to range time
         """
 
-    def ground_points_to_burst_association(self, coordinates: npt.ArrayLike) -> list[Union[list[int], None]]:
+    def ground_points_to_burst_association(self, coordinates: npt.ArrayLike) -> list[list[int] | None]:
         """Determining the burst (or bursts) where the input coordinates lie. If no association can be found (i.e. the
         point is not visible in the scene), None is returned.
 
@@ -256,38 +253,8 @@ class ChannelData(Protocol):
 
         Returns
         -------
-        list[Union[list[int], None]]
+        list[list[int] | None]
             list containing the burst association for each input point, None if no association was found
-        """
-
-    def times_to_burst_association(self, azimuth_times: npt.ArrayLike) -> list[int]:
-        """Associate the right burst to a given input time point. This function returns 1 association for each
-        input time.
-
-        Parameters
-        ----------
-        azimuth_time : npt.ArrayLike
-            azimuth time array in PreciseDateTime format
-
-        Returns
-        -------
-        list[int]
-            burst associated with the given time
-        """
-
-    def pixel_to_burst_association(self, azimuth_px_indexes: npt.ArrayLike) -> list[int]:
-        """Associate the azimuth pixel value to the right burst. This function returns 1 association for each
-        input time.
-
-        Parameters
-        ----------
-        azimuth_px_indexes : npt.ArrayLike
-            azimuth pixel indexes array
-
-        Returns
-        -------
-        list[int]
-            burst associated with the given pixel index
         """
 
     def read_data(self, azimuth_index: int, range_index: int, cropping_size: tuple[int, int]) -> np.ndarray:
@@ -312,7 +279,7 @@ class ChannelData(Protocol):
         Returns
         -------
         np.ndarray
-            cropped swath array centered to the input target coordinates
+            cropped swath array centered to the input target coordinates, data is provided with shape (samples, lines)
         """
 
     def get_location_data(

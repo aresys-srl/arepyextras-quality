@@ -98,7 +98,7 @@ def generate_peak_mask(data: np.ndarray) -> np.ndarray:
 
     # converting absolute of input data to decibel and derive it
     def func(arg):
-        return np.diff(sp.convert_to_db(np.abs(arg), mode=DecibelConversion.POWER))
+        return np.diff(sp.convert_to_db(np.abs(arg), mode=DecibelConversion.AMPLITUDE))
 
     # selecting all decreasing part of sinc lobes, for each direction
     rg_id_dx = np.argwhere(func(data[:max_row, max_col]) < 0).squeeze()
@@ -161,7 +161,7 @@ def generate_peak_mask_lobes(
     # managing range direction
     if rng_lobes_cond:
         data_rng_cut = interp_func((a_y, a_y / side_lobes_directions[0]))
-        data_rng_cut_db = sp.convert_to_db(np.abs(data_rng_cut), mode=DecibelConversion.POWER)
+        data_rng_cut_db = sp.convert_to_db(np.abs(data_rng_cut), mode=DecibelConversion.AMPLITUDE)
 
         rng_id_dx = np.argwhere(np.diff(data_rng_cut_db[:max_row]) < 0).squeeze()
         rng_id_sx = np.argwhere(np.diff(data_rng_cut_db[max_row:]) > 0).squeeze()
@@ -176,7 +176,7 @@ def generate_peak_mask_lobes(
 
     else:
         data_rng_cut = interp_func((a_x * side_lobes_directions[0], a_x))
-        data_rng_cut_db = sp.convert_to_db(np.abs(data_rng_cut), mode=DecibelConversion.POWER)
+        data_rng_cut_db = sp.convert_to_db(np.abs(data_rng_cut), mode=DecibelConversion.AMPLITUDE)
 
         rng_id_dx = np.argwhere(np.diff(data_rng_cut_db[:max_col]) < 0).squeeze()
         rng_id_sx = np.argwhere(np.diff(data_rng_cut_db[max_col:]) > 0).squeeze()
@@ -192,7 +192,7 @@ def generate_peak_mask_lobes(
     # managing azimuth direction
     if az_lobes_cond:
         data_az_cut = interp_func((a_y, a_y / side_lobes_directions[1]))
-        data_az_cut_db = sp.convert_to_db(np.abs(data_az_cut), mode=DecibelConversion.POWER)
+        data_az_cut_db = sp.convert_to_db(np.abs(data_az_cut), mode=DecibelConversion.AMPLITUDE)
 
         az_id_dx = np.argwhere(np.diff(data_az_cut_db[:max_row]) < 0).squeeze()
         az_id_sx = np.argwhere(np.diff(data_az_cut_db[max_row:]) > 0).squeeze()
@@ -206,7 +206,7 @@ def generate_peak_mask_lobes(
         x_4 = y_4 / side_lobes_directions[1]
     else:
         data_az_cut = interp_func((a_x * side_lobes_directions[1], a_x))
-        data_az_cut_db = sp.convert_to_db(np.abs(data_az_cut), mode=DecibelConversion.POWER)
+        data_az_cut_db = sp.convert_to_db(np.abs(data_az_cut), mode=DecibelConversion.AMPLITUDE)
 
         az_id_dx = np.argwhere(np.diff(data_az_cut_db[:max_col]) < 0).squeeze()
         az_id_sx = np.argwhere(np.diff(data_az_cut_db[max_col:]) > 0).squeeze()

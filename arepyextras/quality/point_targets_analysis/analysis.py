@@ -2,37 +2,30 @@
 # SPDX-License-Identifier: MIT
 
 """Point Target Full Analysis function: IRF, RCS and Localization Errors"""
+from __future__ import annotations
+
 import logging
 import math
-from pathlib import Path
-from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
 from arepytools.constants import LIGHT_SPEED
 from arepytools.geometry.inverse_geocoding_core import inverse_geocoding_monostatic_core
-from arepytools.io import (
-    PointSetProduct,
-    convert_array_to_point_target_structure,
-    read_point_targets_file,
-)
 from arepytools.io.io_support import NominalPointTarget
 
 import arepyextras.quality.core.custom_errors as c_err
 import arepyextras.quality.core.generic_dataclasses as gdt
 import arepyextras.quality.core.signal_processing as sp
 import arepyextras.quality.point_targets_analysis.custom_dataclasses as ptdt
-from arepyextras.quality.io.quality_input_from_product_folder import (
-    ProductFolderManager,
-)
 from arepyextras.quality.io.quality_input_protocol import (
     ChannelData,
     QualityInputProduct,
 )
+from arepyextras.quality.point_targets_analysis.config import PointTargetAnalysisConfig
 from arepyextras.quality.point_targets_analysis.point_target_irf import (
     PointTargetIRFAnalysis,
 )
-from arepyextras.quality.point_targets_analysis.support_functions import (
+from arepyextras.quality.point_targets_analysis.support import (
     check_targets_visibility,
     compute_side_lobes_directions,
 )
@@ -41,54 +34,11 @@ from arepyextras.quality.point_targets_analysis.support_functions import (
 log = logging.getLogger("quality_analysis")
 
 
-def point_target_productfolder_wrapper(
-    pf_path: Union[str, Path],
-    point_targets_path: Union[str, Path],
-    ale_limits: tuple[float, float] = None,
-    config: ptdt.PointTargetAnalysisConfig = None,
-) -> tuple[pd.DataFrame, dict]:
-    """Point Target Analysis wrapper designed for aresys product folder format.
-
-    Parameters
-    ----------
-    pf_path : Union[str, Path]
-        path to the product folder of choice
-    point_targets_path : Union[str, Path]
-        path to the point target file or binary product folder
-    ale_limits : Optional[tuple[float, float]], optional
-        absolute localization errors specified in meters
-    config : ptdt.PointTargetAnalysisConfig, optional
-        config file PointTargetAnalysisConfig dataclass to enable and manage different features, if provided,
-        by default None
-
-    Returns
-    -------
-    tuple[pd.DataFrame, dict]
-        pandas dataframe containing all the computed features for each point target,
-        dict of data stored for graphical output needs outside of this function
-    """
-    pf_path = Path(pf_path)
-    point_targets_path = Path(point_targets_path)
-
-    product = ProductFolderManager(pf_path)
-
-    # loading point target information from xml file
-    if point_targets_path.is_dir():
-        coords, rcs = PointSetProduct(point_targets_path).read_data()
-        point_targets = convert_array_to_point_target_structure(coords=coords, rcs=rcs)
-    else:
-        point_targets = read_point_targets_file(point_targets_path)
-
-    return point_target_analysis(product=product, point_targets=point_targets, ale_limits=ale_limits, config=config)
-
-
 def point_target_analysis(
     product: QualityInputProduct,
     point_targets: dict[str, NominalPointTarget],
-    ale_limits: tuple[float, float] = None,
-    config: ptdt.PointTargetAnalysisConfig = None,
-    check_targets_in_scene: bool = True,
-) -> tuple[pd.DataFrame, dict]:
+    config: PointTargetAnalysisConfig | None = None,
+) -> tuple[pd.DataFrame, list[ptdt.PointTargetGraphicalData]]:
     """Function to compute the full point target analysis: IRF, RCS and localization errors.
 
     Parameters
@@ -98,19 +48,15 @@ def point_target_analysis(
     point_targets : dict[str, NominalPointTarget]
         dictionary of point targets locations, with keys being the target id label and value a NominalPointTarget
         dataclass instance with point target location data
-    ale_limits : tuple[float, float], optional
-        absolute localization errors specified in meters, by default None
-    config : ptdt.PointTargetAnalysisConfig, optional
+    config : PointTargetAnalysisConfig, optional
         config file PointTargetAnalysisConfig dataclass to enable and manage different features, if provided,
         by default None
-    check_targets_in_scene : bool, optional
-        allows check to determine which of the input targets lies in the swath scene, by default True
 
     Returns
     -------
-    tuple[pd.DataFrame, dict]
+    tuple[pd.DataFrame, list[ptdt.PointTargetGraphicalData]]
         pandas dataframe containing all the computed features for each point target,
-        dict of data stored for graphical output needs outside of this function
+        list of PointTargetGraphicalData data output for plotting graphs
 
     Raises
     ------
@@ -121,13 +67,13 @@ def point_target_analysis(
     # defining default config if None is given
     if config is None:
         log.info("Configuration file not provided, using default")
-        config = ptdt.PointTargetAnalysisConfig()
+        config = PointTargetAnalysisConfig()
 
     log.info(f"Starting Point Target Analysis on {product.name}")
     log.info(f"Selected Product has {len(product.channels_list)} channels")
 
     # check which target are inside the scene
-    if check_targets_in_scene:
+    if config.check_targets_in_scene:
         log.info("Checking which targets are visible in the scene")
         visible_targets = check_targets_visibility(product, point_targets)
         not_visible_targets = visible_targets.query("burst == None")["id"]
@@ -214,17 +160,18 @@ def point_target_analysis(
                 )
 
                 # ale limits conversion from meters to pixels
-                if ale_limits is not None:
-                    ale_limits = (
-                        np.max([np.ceil(ale_limits[0] / channel_data.range_step_m * 2), 3]),
-                        np.max([np.ceil(ale_limits[1] / location_data.azimuth_step_m * 2), 3]),
+                ale_limits_rescaled = config.ale_limits
+                if config.ale_limits is not None:
+                    ale_limits_rescaled = (
+                        np.max([np.ceil(config.ale_limits[0] / channel_data.range_step_m * 2), 3]),
+                        np.max([np.ceil(config.ale_limits[1] / location_data.azimuth_step_m * 2), 3]),
                     )
 
                 # extracting cropped target area centered on peak coordinates
                 target_area, peak_coords, nominal_coords, peak_coords_swath = _extract_target_area(
                     channel_data=channel_data,
                     azimuth_range_coordinates=az_rng_coords,
-                    ale_limits=ale_limits,
+                    ale_limits=ale_limits_rescaled,
                     initial_crop=config.irf_parameters.peak_finding_roi_size,
                     final_crop=config.irf_parameters.analysis_roi_size,
                 )
@@ -292,8 +239,8 @@ def point_target_analysis(
 
                 # estimating doppler rate and doppler rate theoretical at peak position
                 doppler_rate = (
-                    channel_data.doppler_rate_polynomial.evaluate(azimuth_time=az_time_peak, range_time=rng_time_peak)
-                    if channel_data.doppler_rate_polynomial is not None
+                    channel_data.doppler_rate.evaluate(azimuth_time=az_time_peak, range_time=rng_time_peak)
+                    if channel_data.doppler_rate is not None
                     else None
                 )
                 doppler_rate_th = sp.compute_doppler_rate_theoretical(
@@ -323,6 +270,9 @@ def point_target_analysis(
                 additional_info.doppler_frequency = doppler_centroid
                 additional_info.peak_azimuth_time = az_time_peak
                 additional_info.peak_range_time = rng_time_peak
+                additional_info.peak_azimuth_from_burst_start = peak_coords_swath[1] - sum(
+                    channel_data.lines_per_burst[:burst]
+                )
                 additional_info.steering_doppler_frequency = steering_doppler_freq
                 info.squint_angle = np.round(squint_angle, 6)
                 info.range_position = peak_coords_swath[0]
@@ -359,9 +309,9 @@ def point_target_analysis(
                     irf_res.range_resolution *= location_data.range_step_m
                     irf_res.azimuth_resolution *= location_data.azimuth_step_m
 
-                    irf_res.slant_range_localization_error *= original_rng_step
-                    irf_res.ground_range_localization_error *= location_data.ground_range_step_m
-                    irf_res.azimuth_localization_error *= original_az_step
+                    irf_res.slant_range_localization_error *= -original_rng_step
+                    irf_res.ground_range_localization_error *= -location_data.ground_range_step_m
+                    irf_res.azimuth_localization_error *= -original_az_step
 
                     if config.perform_rcs:
                         log.debug("Performing RCS analysis...")
@@ -432,8 +382,13 @@ def point_target_analysis(
                 )
 
     # storing values in a pandas dataframe
-    results_df = _results_to_dataframe(res)
-    results_df.sort_values(by=["target", "polarization"], inplace=True)
+    if res:
+        results_df = _results_to_dataframe(res)
+        results_df.sort_values(by=["target", "polarization"], inplace=True)
+    else:
+        log.error("Provided Point Targets are not visible in the scene. Analysis could not be performed.")
+        results_df = pd.DataFrame(columns=["error_point_target_not_in_scene"])
+        graphs = [ptdt.PointTargetGraphicalData()]
 
     return results_df, graphs
 
@@ -441,7 +396,7 @@ def point_target_analysis(
 def _extract_target_area(
     channel_data: ChannelData,
     azimuth_range_coordinates: gdt.SARCoordinates,
-    ale_limits: Optional[tuple[float, float]] = None,
+    ale_limits: tuple[float, float] | None = None,
     initial_crop: tuple[int, int] = (33, 33),
     final_crop: tuple[int, int] = (128, 128),
     ovrs_factor: int = 5,
@@ -454,10 +409,10 @@ def _extract_target_area(
         aresys product manager instance
     azimuth_range_coordinates : dtc.SARCoordinates
         azimuth and range coordinates SARCoordinates dataclass
-    ale_limits : Optional[tuple[float, float]], optional
+    ale_limits : tuple[float, float] | None, optional
         absolute localization error limits, by default None
     initial_crop : tuple[int, int], optional
-        first step roi boundaries (range, azimuth), by default (34, 34)
+        first step roi boundaries (range, azimuth), by default (33, 33)
     final_crop : tuple[int, int], optional
         final step roi boundaries (range, azimuth), by default (128, 128)
     ovrs_factor : int, optional
@@ -474,7 +429,8 @@ def _extract_target_area(
 
     # managing ale limits
     if ale_limits is not None:
-        initial_crop = tuple(int(ale * 1.2) for ale in ale_limits)
+        initial_crop = tuple(int(ale) for ale in ale_limits)
+        log.info(f"External Maximum ALE limits provided: using {initial_crop} ROI for peak searching")
 
     # first cropping around target nominal position
     try:
@@ -489,11 +445,16 @@ def _extract_target_area(
         return None, None, None, None
 
     # locating real peak position in cropped image
-    log.debug(f"Locating signal peak position")
+    log.debug("Locating signal peak position")
     if np.isrealobj(target_area):
         _, peak_range_im, peak_azimuth_im = sp.locate_max_2d_interp(data=np.abs(target_area) ** 2)
     else:
         _, peak_range_im, peak_azimuth_im = sp.locate_max_2d_interp(data=target_area)
+
+    if np.isnan(peak_range_im) or np.isnan(peak_azimuth_im):
+        log.error("Could not find peak of the target area")
+        return None, None, None, None
+
     # evaluating distance between nominal target and peak
     delta_rng_trgt_pk = peak_range_im - target_area.shape[0] // 2
     delta_az_trgt_pk = peak_azimuth_im - target_area.shape[1] // 2
@@ -510,17 +471,17 @@ def _extract_target_area(
     # second cropping, centered on peak coordinates
     peak_coords_swath = np.array(
         (
-            np.round(azimuth_range_coordinates.range_index_subpx) - np.round(initial_crop[1] / 2) + peak_range_im,
-            np.round(azimuth_range_coordinates.azimuth_index_subpx) - np.round(initial_crop[0] / 2) + peak_azimuth_im,
+            np.round(azimuth_range_coordinates.range_index_subpx) - np.round(initial_crop[0] / 2) + peak_range_im,
+            np.round(azimuth_range_coordinates.azimuth_index_subpx) - np.round(initial_crop[1] / 2) + peak_azimuth_im,
         )
     )
     peak_az_index = np.round(
         np.round(azimuth_range_coordinates.azimuth_index_subpx)
-        - np.floor(initial_crop[0] / 2)
+        - np.floor(initial_crop[1] / 2)
         + np.floor(peak_azimuth_im)
     )
     peak_rng_index = np.round(
-        np.round(azimuth_range_coordinates.range_index_subpx) - np.floor(initial_crop[1] / 2) + np.floor(peak_range_im)
+        np.round(azimuth_range_coordinates.range_index_subpx) - np.floor(initial_crop[0] / 2) + np.floor(peak_range_im)
     )
 
     # final cropping around peak position
@@ -651,11 +612,8 @@ def _compute_additional_rcs_values(
     # evaluating RCS Error and Peak Phase Error
     arg = math.dist(sat_position, target_info.xyz_coordinates) / (LIGHT_SPEED / fc_hz)
     peak_phase_error = np.angle(rcs_input.peak_value_complex * np.exp(1j * 4 * np.pi * arg), deg=True)
-    peak_error = np.sqrt(rcs / ptrcs) * np.exp(1j * peak_phase_error)
-    rcs_error = sp.convert_to_db(np.abs(peak_error), mode=sp.DecibelConversion.POWER)
-    # this is equivalent to:
-    # rcs_error = np.sqrt(rcs / ptrcs)
-    # rcs_res['rcs_error'] = 20*np.log10(rcs_error)
+    ptrcs_db = sp.convert_to_db(abs(ptrcs)) if np.iscomplexobj(ptrcs) else ptrcs
+    rcs_error = rcs_db - ptrcs_db
 
     return rcs, rcs_db, rcs_error, peak_phase_error
 
@@ -688,7 +646,10 @@ def _results_to_dataframe(results: list[ptdt.PointTargetAnalysisOutput]) -> pd.D
     # adding unit of measure to column names
     new_col = _add_unit_of_measure(columns=df_res.columns)
     df_res.columns = new_col
-    df_res["target"] = pd.to_numeric(df_res["target"], errors="ignore")
+    try:
+        df_res["target"] = pd.to_numeric(df_res["target"])
+    except ValueError:
+        pass
 
     return df_res
 

@@ -2,6 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 """
-Quality package, configuration submodule
-----------------------------------------
+Unittest module
+---------------
 """

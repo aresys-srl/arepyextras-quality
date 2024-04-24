@@ -70,7 +70,7 @@ class CoordinatesType(Enum):
 class DecibelConversion(Enum):
     """Enum class for decibel multiplying factor setting"""
 
-    INTENSITY = auto()
+    AMPLITUDE = auto()
     POWER = auto()
 
 
@@ -120,6 +120,7 @@ class SARImageType(Enum):
     NESZ_MAP = auto()
     INT = auto()
     OCN = auto()
+    MSLC = auto()
 
     @staticmethod
     def from_str(label: str) -> SARImageType:
@@ -153,6 +154,8 @@ class SARImageType(Enum):
             return SARImageType.GRD
         if "INTERFEROMETRY" in label:
             return SARImageType.INT
+        if "MERGED SLC" in label:
+            return SARImageType.MSLC
 
         raise RuntimeError(f"{label} label not supported")
 

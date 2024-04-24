@@ -2,129 +2,80 @@
 # SPDX-License-Identifier: MIT
 
 """Graphical Module to generate plots for Radiometric Analysis"""
+from __future__ import annotations
+
+import logging
 from pathlib import Path
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.signal import savgol_filter
 
-import arepyextras.quality.core.generic_dataclasses as gdt
 import arepyextras.quality.radiometric_analysis.custom_dataclasses as rdt
 
+# syncing with logger
+log = logging.getLogger("quality_analysis")
 
-def radiometric_profiles(
-    data: list[rdt.RadiometricAnalysisOutput],
-    out_dir: Path,
-    config: rdt.RadiometricAnalysisConfig,
-    projection: gdt.SARProjection,
-) -> None:
-    """Generation of the Radiometric Analysis graphical output.
+
+def radiometric_2D_hist_plot(data: rdt.RadiometricProfilesOutput, out_dir: Union[str, Path], title: str | None = None):
+    """Radiometric profiles 2D histogram plot.
 
     Parameters
     ----------
-    data : list[rdt.RadiometricAnalysisOutput]
-        list of RadiometricAnalysisOutput results dataclass
-    out_dir : Path
-        output directory where to save the graphs
-    config : rdt.RadiometricAnalysisConfig
-        configuration RadiometricAnalysisConfig dataclass
-    projection : gdt.SARProjection
-        data projection
+    data : rdt.RadiometricProfilesOutput
+        radiometric profiles output data
+    out_dir : Union[str, Path]
+        output directory
     """
+    graphs_dir = Path(out_dir).joinpath("graphs")
+    graphs_dir.mkdir(exist_ok=True)
 
-    color_set = ["#7E5920", "#FFA737", "#5F5449", "#5999D9"]
+    # figure plot
+    if title is None:
+        title = f"Radiometric Profile Histogram {data.swath} {data.polarization.name}"
+    log.info(f"Generating {title}")
 
-    # re-organizing input data
-    times = list({p.time for p in data})
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=180)
 
-    for time_id, time in enumerate(times):
-        selected_data = [p for p in data if p.time == time]
-        direction = list({p.direction for p in selected_data})[0]
-        out_type = list({p.value_type for p in selected_data})[0]
-        smoothed_profiles = np.ma.masked_invalid(np.concatenate([p.smoothed_profile for p in selected_data]))
-        original_profiles = np.ma.masked_invalid(np.concatenate([p.profile for p in selected_data]))
-        axes = np.concatenate([p.axis for p in selected_data])
+    cs = ax.imshow(
+        data.hist_2d,
+        cmap="binary",
+        vmin=1,
+        extent=[
+            data.hist_x_bins_axis.min(),
+            data.hist_x_bins_axis.max(),
+            data.hist_y_bins_axis.max(),
+            data.hist_y_bins_axis.min(),
+        ],
+    )
+    ax.invert_yaxis()
+    mean_profile = np.nanmean(data.profiles, 0)
+    if data.look_angles is not None:
+        mean_profile_axis = np.nanmean(data.look_angles, 0)
+    else:
+        mean_profile_axis = np.nanmean(data.block_azimuth_times, 0)
+    smoothed_profile = savgol_filter(mean_profile, polyorder=3, window_length=mean_profile.size // 10)
 
-        # initializing figure
-        fig, axs = plt.subplots(figsize=(14, 10))
-        fig.suptitle(f"Radiometric Profiles @ {time}", fontsize=16, fontweight="bold")
-        axs.set_title(f"{direction.name.capitalize()} direction", fontsize=12)
+    # forcing equal aspect ratio
+    aspect = 8 / 6
+    im = ax.get_images()
+    extent = im[0].get_extent()
+    ax.set_aspect(abs((extent[1] - extent[0]) / (extent[3] - extent[2])) / aspect)
 
-        for num, channel in enumerate(selected_data):
-            if direction == rdt.RadiometricAnalysisDirection.RANGE:
-                x_label = "Slant Range time [s]"
-                if projection == gdt.SARProjection.GROUND_RANGE:
-                    x_label = "Ground Range distance [m]"
+    # ax.invert_yaxis()
+    plt.plot(mean_profile_axis, smoothed_profile, color="#63B6E3")
 
-                if config.axis == rdt.RadiometricAnalysisAxes.INCIDENCE_ANGLE:
-                    x_label = "Incidence Angle [deg]"
-                elif config.axis == rdt.RadiometricAnalysisAxes.LOOK_ANGLE:
-                    x_label = "Look Angle [deg]"
-            else:
-                x_label = "Azimuth time (relative) [s]"
+    plt.locator_params(axis="x", nbins=10)
+    plt.locator_params(axis="y", nbins=10)
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
+    if data.look_angles is not None:
+        plt.xlabel("Elevation Angle [deg]", fontdict={"size": 12})
+    else:
+        plt.xlabel("Azimuth Block Times [s]", fontdict={"size": 12})
+    plt.ylabel("Power [dB]", fontdict={"size": 12})
+    plt.title(title, fontdict={"size": 16, "weight": "bold"})
 
-            if out_type == rdt.RadiometricAnalysisValue.AMPLITUDE:
-                nought = " ".join([s.capitalize() for s in config.output_type.name.split("_")])
-                y_label = f"{config.value.name.capitalize()} {nought} [dB]"
-            else:
-                y_label = "Phase [rad]"
-
-            _plotting_profiles(axis=axs, channel=channel, color=color_set[num], x_label=x_label, y_label=y_label)
-
-        # customizing data for histogram 2D plot
-        profile_mean = smoothed_profiles.mean()
-        x_lim = [np.min(axes), np.max(axes)]
-        y_lim = [smoothed_profiles.min(), smoothed_profiles.max()]
-        y_lim[0] = y_lim[0] * 1.1 if y_lim[0] < 0 else y_lim[0] * 0.9
-        y_lim[1] = y_lim[1] * 0.9 if y_lim[1] < 0 else y_lim[1] * 1.1
-
-        # x_edges = np.linspace(x_lim[0], x_lim[1], 101)
-        # y_edges = np.linspace(profile_mean-6, profile_mean+6, 51)
-        y_values = original_profiles[~original_profiles.mask].data.copy()
-        x_values = axes[~original_profiles.mask].copy()
-        display_cond = np.logical_and(y_values > profile_mean - 6, y_values < profile_mean + 6)
-
-        # plotting histogram
-        axs.hist2d(x_values[display_cond], y_values[display_cond], (101, 51), cmin=1, cmap="bone", alpha=0.7, label="_")
-
-        # setting axes limits
-        axs.set_xlim(x_lim)
-        axs.set_ylim(y_lim)
-
-        axs.grid(visible=True, linestyle="--", alpha=0.6)
-
-        plt.legend()
-
-        brst_info = ("_burst" + str(selected_data[0].burst)) if selected_data[0].burst is not None else ""
-        plot_name = (
-            selected_data[0].swath + brst_info + "_radiometric_analysis_" + direction.name.lower() + "_" + str(time_id)
-        )
-
-        plt.tight_layout()
-        plt.savefig(out_dir.joinpath(plot_name).with_suffix(".png"), dpi=200)
-        plt.close(fig)
-
-
-def _plotting_profiles(axis: plt.Axes, channel: rdt.RadiometricAnalysisOutput, color: str, x_label: str, y_label: str):
-    """Function to plot radiometric analysis output profiles.
-
-    Parameters
-    ----------
-    axis : plt.Axes
-        axes where to plot the profiles
-    channel : rdt.RadiometricAnalysisOutput
-        radiometric analysis output dataclass
-    color : str
-        color of the plot line
-    x_label : str
-        x axis label
-    y_label : str
-        y axis label
-    """
-
-    brst_label = (" Burst " + str(channel.burst)) if channel.burst is not None else ""
-    label = channel.swath + brst_label + " " + channel.polarization
-
-    axis.plot(channel.axis, channel.smoothed_profile, color=color, label=label)
-
-    axis.set_xlabel(x_label, fontsize=12, fontweight="bold")
-    axis.set_ylabel(y_label, fontsize=12, fontweight="bold")
+    fig.savefig(graphs_dir.joinpath(title.lower().replace(" ", "_")).with_suffix(".png"))
+    plt.close("all")

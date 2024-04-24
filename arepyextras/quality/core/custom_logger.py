@@ -42,6 +42,17 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
+class CustomFormatterFileHandler(logging.Formatter):
+    """Custom logger formatter with colors"""
+
+    # message formatting layout
+    log_fmt = "| %(levelname)-9s @ %(module)s| %(asctime)s | %(message)s"
+
+    def format(self, record):
+        formatter = logging.Formatter(self.log_fmt)
+        return formatter.format(record)
+
+
 class MyHandler(logging.StreamHandler):
     """Custom logging stream handler to centralize logging"""
 

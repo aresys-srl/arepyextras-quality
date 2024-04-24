@@ -169,12 +169,16 @@ class ChannelManager:
         self._polarization = SARPolarization(self._swath_info.polarization.value)
         self._looking_side = SARSideLooking(self._dataset_info.side_looking.value.upper())
         self._carrier_freq = self._dataset_info.fc_hz
-        self._az_time_half_swath = (
-            self._raster_info.lines_start + (self._raster_info.lines - 1) * self._raster_info.lines_step / 2
-        )
         rng_time_half_swath = (
             self._raster_info.samples_start + (self._raster_info.samples - 1) * self._raster_info.samples_step / 2
         )
+        self._azimuth_axis = self._compute_azimuth_axis()
+        self._az_time_half_swath = self._azimuth_axis[self.azimuth_axis.size // 2]
+        self._range_axis = (
+            np.arange(0, self._raster_info.samples, 1) * self._raster_info.samples_step
+            + self._raster_info.samples_start
+        )
+        self._slant_range_axis = self._compute_slant_range_axis()
         if self._channel_projection == SARProjection.GROUND_RANGE:
             poly = self._channel_metadata.get_ground_to_slant()
             rng_time_half_swath = create_sorted_poly_list(poly).evaluate(
@@ -192,10 +196,12 @@ class ChannelManager:
         self._orbit_direction = SAROrbitDirection[self._state_vectors.orbit_direction.value]
 
         # generating attitude boresight normal curve
-        self._attitude = create_general_sar_attitude(
-            self._state_vectors, attitude_info=self._attitude_info, ignore_anx_after_orbit_start=True
-        )
-        self._boresight_normal = create_attitude_boresight_normal_curve_wrapper(attitude=self._attitude)
+        self._boresight_normal = None
+        if self._attitude_info is not None:
+            self._attitude = create_general_sar_attitude(
+                self._state_vectors, attitude_info=self._attitude_info, ignore_anx_after_orbit_start=True
+            )
+            self._boresight_normal = create_attitude_boresight_normal_curve_wrapper(attitude=self._attitude)
 
         # assemble swst changes
         self._swst_changes = None
@@ -217,13 +223,6 @@ class ChannelManager:
         else:
             # should be a 1D array
             self._lines_per_burst_array = np.repeat(self._raster_info.lines, 1)
-
-        self._range_axis = (
-            np.arange(0, self._raster_info.samples, 1) * self._raster_info.samples_step
-            + self._raster_info.samples_start
-        )
-        self._slant_range_axis = self._compute_slant_range_axis()
-        self._azimuth_axis = self._compute_azimuth_axis()
 
     def _compute_slant_range_axis(self) -> np.ndarray:
         """Computing slant range full axis.
@@ -307,6 +306,44 @@ class ChannelManager:
 
         return burst_az_boundaries, burst_rng_boundaries
 
+    def _times_to_burst_association(self, azimuth_times: npt.ArrayLike) -> list[int]:
+        """Associate the right burst to a given input time point. This function returns 1 association for each
+        input time.
+        Associating time only to the first burst containing it.
+
+        Parameters
+        ----------
+        azimuth_time : npt.ArrayLike
+            azimuth time array in PreciseDateTime format
+
+        Returns
+        -------
+        list[int]
+            burst associated with a given time
+
+        Raises
+        ------
+        c_err.CoordinatesOutOfBounds
+            if input time exceeds tme boundaries of the swath
+        """
+        if self._burst_info is None:
+            return [0] * len(azimuth_times)
+
+        bursts_start_times = self._burst_info.get_azimuth_start_time()
+        last_time = bursts_start_times[0] + self._burst_info.get_lines().sum() * self._raster_info.lines_step
+
+        bursts = []
+        for time in azimuth_times:
+            if time < bursts_start_times[0] or time > last_time:
+                raise c_err.CoordinatesOutOfBounds(f"{time} is out of the recorded timeline")
+
+            time_diff = time - bursts_start_times
+            time_mask = np.ma.masked_less(time_diff.astype("float64"), 0)
+            # associating time only to the first burst containing it
+            bursts.append(time_mask.argmin())
+
+        return bursts
+
     @property
     def swath_name(self) -> str:
         """Name of the swath being analyzed"""
@@ -378,17 +415,17 @@ class ChannelManager:
         return self._trajectory
 
     @property
-    def boresight_normal_curve(self) -> Generic3DCurve:
+    def boresight_normal_curve(self) -> Union[None, Generic3DCurve]:
         """Channel attitude boresight normal 3D curve"""
         return self._boresight_normal
 
     @property
-    def doppler_centroid_polynomial(self) -> Union[None, DopplerPolynomialWrapper]:
+    def doppler_centroid(self) -> Union[None, DopplerPolynomialWrapper]:
         """Channel doppler centroid polynomial wrapper"""
         return self._doppler_centroid_poly
 
     @property
-    def doppler_rate_polynomial(self) -> Union[None, DopplerPolynomialWrapper]:
+    def doppler_rate(self) -> Union[None, DopplerPolynomialWrapper]:
         """Channel doppler rate polynomial wrapper"""
         return self._doppler_rate_poly
 
@@ -543,8 +580,11 @@ class ChannelManager:
             poly = self._channel_metadata.get_slant_to_ground()
             rng_value = create_sorted_poly_list(poly).evaluate((azimuth_time, range_time))
 
-        if self._burst_info is not None and burst is not None:
+        if self._burst_info is not None:
             # i.e. for TOPSAR products, burst information must be taken into account
+            if burst is None:
+                burst = self._times_to_burst_association([azimuth_time])[0]
+
             rng_idx = (rng_value - self._burst_info.get_range_start_time(burst)) / self._raster_info.samples_step
             azmth_idx = (
                 azimuth_time - self._burst_info.get_azimuth_start_time(burst)
@@ -598,81 +638,6 @@ class ChannelManager:
 
         return bursts
 
-    def times_to_burst_association(self, azimuth_times: npt.ArrayLike) -> list[int]:
-        """Associate the right burst to a given input time point. This function returns 1 association for each
-        input time.
-        Associating time only to the first burst containing it.
-
-        Parameters
-        ----------
-        azimuth_time : npt.ArrayLike
-            azimuth time array in PreciseDateTime format
-
-        Returns
-        -------
-        list[int]
-            burst associated with a given time
-
-        Raises
-        ------
-        c_err.CoordinatesOutOfBounds
-            if input time exceeds tme boundaries of the swath
-        """
-        if self._burst_info is None:
-            return [0] * len(azimuth_times)
-
-        bursts_start_times = self._burst_info.get_azimuth_start_time()
-        last_time = bursts_start_times[0] + self._burst_info.get_lines().sum() * self._raster_info.lines_step
-
-        bursts = []
-        for time in azimuth_times:
-            if time < bursts_start_times[0] or time > last_time:
-                raise c_err.CoordinatesOutOfBounds(f"{time} is out of the recorded timeline")
-
-            time_diff = time - bursts_start_times
-            time_mask = np.ma.masked_less(time_diff.astype("float64"), 0)
-            # associating time only to the first burst containing it
-            bursts.append(time_mask.argmin())
-
-        return bursts
-
-    def pixel_to_burst_association(self, azimuth_px_indexes: npt.ArrayLike) -> list[int]:
-        """Associate the azimuth pixel value to the right burst. This function returns 1 association for each
-        input time.
-
-        Parameters
-        ----------
-        azimuth_px_indexes : npt.ArrayLike
-            azimuth pixel indexes array
-
-        Returns
-        -------
-        list[int]
-            burst associated with a given pixel index
-
-        Raises
-        ------
-        c_err.CoordinatesOutOfBounds
-            if input time exceeds tme boundaries of the swath
-        """
-        if self._burst_info is None:
-            return [0] * len(azimuth_px_indexes)
-
-        bursts_lines = self._burst_info.get_lines()
-        burst_boundaries = np.array([0] + [sum(bursts_lines[: t + 1]) for t, _ in enumerate(bursts_lines)])
-
-        bursts = []
-        for coord in azimuth_px_indexes:
-            if coord > burst_boundaries[-1]:
-                raise c_err.CoordinatesOutOfBounds(f"{coord} pixel exceeds swath's bounds")
-
-            px_diff = coord - burst_boundaries
-            px_mask = np.ma.masked_less(px_diff, 0)
-
-            bursts.append(px_mask.argmin())
-
-        return bursts
-
     def read_data(
         self,
         azimuth_index: int,
@@ -681,7 +646,6 @@ class ChannelManager:
     ) -> np.ndarray:
         """Extracting the swath portion centered to the provided target position and of size cropping_size by
         cropping_size. Target position is provided via its azimuth and range indexes in the swath array.
-        Output can be transposed, if requested.
 
         Parameters
         ----------
@@ -695,7 +659,7 @@ class ChannelManager:
         Returns
         -------
         np.ndarray
-            cropped swath array centered to the input target coordinates
+            cropped swath array centered to the input target coordinates, data is provided with shape (samples, lines)
 
         Raises
         ------
@@ -758,13 +722,13 @@ class ChannelManager:
             LocationData instance related to the selected location
         """
 
-        # TODO switch back to compute values directly at target position and not a mid range
         incidence_angle = compute_incidence_angles_from_orbit(
             orbit=self._orbit,
             azimuth_time=azimuth_time,
-            range_times=self.mid_range_time,
+            range_times=range_time,
             look_direction=self.looking_side.value,
         )
+        # TODO compute look angles/ground velocity directly at target position and not a mid range
         look_angle = compute_look_angles_from_orbit(
             orbit=self._orbit,
             azimuth_time=azimuth_time,
