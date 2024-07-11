@@ -41,7 +41,7 @@ For profiles extracted along the *RANGE* direction, the incidence angle axis is 
 Few pre-configured radiometric profiles have already been developed and implemented in this module, namely:
 
 - **Noise Equivalent Sigma-Zero (NESZ) Profiles**
-- **Gamma-Zero Profiles**
+- **Average Elevation Profiles**
 - **Scalloping Profiles**
 
 These are all wrapper on the same generic radiometric profile core function with arguments and key parameters pre-set to perform
@@ -74,24 +74,36 @@ expected noise level.
 The NESZ level estimation is typically performed for cross-pol channels only since signal level in co-pol channels is always too high.
 
 The profile extraction algorithm for NESZ is already implemented and it consists in performing a 2D average of the valid
-block data (not null values) and then extracting only the first percentile of azimuth distributed data in the block for each
-range pixel.
+block data (not null values) before selecting the center of the highest-count bin of the intensity histogram performed
+along azimuth direction for each range value.
+
+.. figure:: ../_static/images/nesz.png
+    :align: center
+    :width: 1000
+
+    NESZ average smoothed profile (the solid line) and 2D noise histogram.
 
 
-Gamma-Zero (:math:`\gamma^0`) Profiles
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Average Elevation Profiles
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Gamma-Zero profiles are extracted along the **RANGE** direction, one for each azimuth partitioning block. The output radiometric
-quantity is set to gamma-nought.
+Average Elevation Profiles are extracted along the **RANGE** direction, one for each azimuth partitioning block. The output radiometric
+quantity can be set to any "nought" needed.
 
-These :math:`\gamma^0` profiles can be exploited to assess relative radiometric calibration in case of ScanSAR and TopSAR modes by comparing
+These profiles can be exploited to assess relative radiometric calibration in case of ScanSAR and TopSAR modes by comparing
 the average levels from beam to beam. They can also be used in conjunction with the antenna pattern to estimate the
 residual roll correction.
 
-The profile extraction algorithm for :math:`\gamma^0` is already implemented and it consists in extracting the mean of
-azimuth distributed data in the block for each range pixel after applying a median filter and performing outlier removal.
+The profile extraction algorithm is already implemented and it consists in extracting the mean of azimuth distributed data
+in the block for each range pixel after applying a median filter and performing outlier removal.
 The filter and the outlier removal functionalities can be enabled/disabled and their parameters edited from the configuration
 file.
+
+.. figure:: ../_static/images/rain_forest.png
+    :align: center
+    :width: 1000
+
+    Gamma Nought profiles on Rain Forest average profile (the solid line) and 2D histogram.
 
 
 Scalloping Profiles

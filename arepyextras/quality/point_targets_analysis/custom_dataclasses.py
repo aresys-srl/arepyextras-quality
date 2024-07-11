@@ -206,5 +206,8 @@ class PointTargetGraphicalData:
 
     target: int = None
     channel: int = None
+    swath: str = None
+    burst: int = None
+    polarization: SARPolarization = None
     irf: IRFGraphDataOutput = None
     rcs: RCSGraphDataOutput = None

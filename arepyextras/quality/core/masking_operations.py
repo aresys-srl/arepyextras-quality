@@ -3,6 +3,8 @@
 
 """Isolating masking operations for PSLR, ISLR and SSLR"""
 
+from __future__ import annotations
+
 import numpy as np
 from scipy import interpolate as sp_interp
 from scipy.signal import convolve2d
@@ -490,7 +492,7 @@ def pslr_masking(
     elif mask_flag == MaskingMethod.RESOLUTION:
         # Resolution case
         if lobes_flag:
-            main_lobe_mask = generate_resolution_mask_lobes(
+            _, _, main_lobe_mask = generate_resolution_mask_lobes(
                 x_axis=a_x,
                 y_axis=a_y,
                 res_x=az_res,
@@ -878,7 +880,7 @@ def sslr_profile_cutting(
     peak_pos: tuple[int, int],
     side_lobes_directions: tuple[float, float],
     interp_factor: int = 16,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray | float, np.ndarray | float]:
     """Extracting profile cuts both for range and azimuth from the masked input 2D array for SSLR computation.
 
     Parameters
@@ -894,9 +896,9 @@ def sslr_profile_cutting(
 
     Returns
     -------
-    tuple[np.ndarray, np.ndarray]
-        range profile cut,
-        azimuth profile cut
+    tuple[np.ndarray | float, np.ndarray | float]
+        range profile cut (or its max in case of side lobes),
+        azimuth profile cut (or its max in case of side lobes),
     """
 
     # Compute pixel axes of the interpolated data

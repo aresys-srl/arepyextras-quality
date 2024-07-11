@@ -1,6 +1,34 @@
 Changelog
 =========
 
+v1.1.2
+------
+
+**New Features**
+
+- ``radiometric_analysis.elevation_profiles()`` added: it can be used to extract average elevation radiometric profiles along range direction
+- `Interferometric Analysis`: coherence computation for two co-registered products is now supported
+
+**Incompatible changes**
+
+- ``radiometric_analysis.gamma_profiles()`` removed
+
+**Bug Fixing**
+
+- `Signal Processing`: get_frequency_axis() central_freqs bug fixing to support input arrays with uneven shape
+- `Masking Operations`: pslr masking bugfix, sslr masking annotations improved
+- `Point Target Analysis`: get_doppler_centroid behavior fixed
+- `Point Target Analysis - Graphical Output`: fixed sign of localization error for graphs
+- `Radiometric Analysis - NESZ`: algorithm almost completely changed to be scientifically accurate
+
+**Other changes**
+
+- `Input Protocol`: added ``radiometric_quantity`` property to the protocol interface
+- `Input Protocol`: added ``output_radiometric_quantity`` as input argument for ``read_data`` method
+- `Radiometric Analysis - NESZ`: improved histogram by automatically compute bins
+- Radiometric analysis plots improved
+- Unittest coverage improved
+
 v1.1.1
 ------
 

@@ -21,16 +21,17 @@ classifiers = [
 requires-python = ">= 3.9"
 dependencies = [
     "netCDF4",
-    "arepytools >= 1.6.1",
+    "arepytools",
     "scipy",
-    "numpy >= 1.20",
-    "pandas >= 1.4.0",
-]
+    "numpy<2",
+    "pandas",
+    ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
 graphs = ['matplotlib >= 3.5', 'plotly >= 5.10']
 dev = ['black', 'isort', 'pylint']
+
 doc = [
     "ipython",
     "nbsphinx",

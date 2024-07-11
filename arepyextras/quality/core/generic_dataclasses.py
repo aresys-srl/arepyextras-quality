@@ -121,6 +121,7 @@ class SARImageType(Enum):
     INT = auto()
     OCN = auto()
     MSLC = auto()
+    COHERENCE = auto()
 
     @staticmethod
     def from_str(label: str) -> SARImageType:
@@ -156,6 +157,8 @@ class SARImageType(Enum):
             return SARImageType.INT
         if "MERGED SLC" in label:
             return SARImageType.MSLC
+        if "COHERENCE MAP" in label:
+            return SARImageType.COHERENCE
 
         raise RuntimeError(f"{label} label not supported")
 

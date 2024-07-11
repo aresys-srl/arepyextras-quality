@@ -69,25 +69,25 @@ def nesz_profiles(
     return radiometric_profiles(
         product=product,
         direction=rdt.RadiometricAnalysisDirection.RANGE,
-        profile_extractor_func=_nesz_profiles_extractor,
+        profile_extractor_func=nesz_profiles_extractor,
         output_quantity=output_quantity,
         config=config,
     )
 
 
-def gamma_profiles(
+def average_elevation_profiles(
     product: QualityInputProduct,
-    output_quantity: gdt.SARRadiometricQuantity = gdt.SARRadiometricQuantity.GAMMA_NOUGHT,
+    output_quantity: gdt.SARRadiometricQuantity,
     config: RadiometricProfilesConfig | None = None,
 ) -> list[rdt.RadiometricProfilesOutput]:
-    """Gamma radiometric profiles computation. Profiles along RANGE direction.
+    """Average elevation radiometric profiles computation. Profiles along RANGE direction.
 
     Parameters
     ----------
     product : QualityInputProduct
         object containing product information and data satisfying the QualityInputProduct protocol
-    output_quantity : gdt.SARRadiometricQuantity, optional
-        desired radiometric output quantity, by default gdt.SARRadiometricQuantity.GAMMA_NOUGHT
+    output_quantity : gdt.SARRadiometricQuantity
+        desired radiometric output quantity
     config : RadiometricProfilesConfig | None, optional
         RadiometricProfiles configuration, by default None
 
@@ -96,14 +96,15 @@ def gamma_profiles(
     list[rdt.RadiometricProfilesOutput]
         a RadiometricProfilesOutput dataclass for each channel
     """
-    config = _gamma_config_manager(config=config)
+    config = _average_elevation_config_manager(config=config)
 
-    log.info(f"Performing Gamma Profiles Analysis on {product.name}")
+    log.info(f"Performing Average Elevation Profiles Analysis on {product.name}")
+    log.info(f"Requested output radiometric quantity is: {output_quantity.name}")
 
     return radiometric_profiles(
         product=product,
         direction=rdt.RadiometricAnalysisDirection.RANGE,
-        profile_extractor_func=_gamma_profiles_extractor,
+        profile_extractor_func=average_elevation_profiles_extractor,
         output_quantity=output_quantity,
         config=config,
     )
@@ -138,7 +139,7 @@ def scalloping_profiles(
         product=product,
         direction=rdt.RadiometricAnalysisDirection.AZIMUTH,
         output_quantity=output_quantity,
-        profile_extractor_func=_scalloping_profiles_extractor,
+        profile_extractor_func=scalloping_profiles_extractor,
         config=config,
     )
 
@@ -179,7 +180,7 @@ def radiometric_profiles(
     for channel in product.channels_list:
         channel_data = product.get_channel_data(channel_id=channel)
         log.info(
-            f"Analyzing channel {channel}, swath {channel_data.swath_name} and"
+            f"Analyzing channel {channel}, swath {channel_data.swath_name} and "
             + f"polarization {channel_data.polarization.value}..."
         )
 
@@ -222,11 +223,12 @@ def radiometric_profiles(
         for bc_num, center in enumerate(blocks_centers_px):
             log.info(f"Processing block {bc_num + 1} of {blocks_num}")
 
-            # reading block
+            # reading block, without converting the data here, applying radiometric conversion in the next steps
             target_area = channel_data.read_data(
                 azimuth_index=center[0],
                 range_index=center[1],
                 cropping_size=cropping_size,
+                output_radiometric_quantity=channel_data.radiometric_quantity,
             )
             # converting image to power
             target_area = np.abs(target_area) ** 2
@@ -253,6 +255,7 @@ def radiometric_profiles(
                 log.info(
                     f"Converting data from {config.input_quantity.name.lower()} to {output_quantity.name.lower()}."
                 )
+                # TODO: use incidence angles from product when available
                 incidence_angle_mid_block = compute_incidence_angles(sensor_positions=sensor_pos, points=ground_points)
                 target_area = radiometric_correction(
                     data=target_area,
@@ -301,7 +304,7 @@ def radiometric_profiles(
     return output_results
 
 
-def _nesz_profiles_extractor(data: np.ndarray, params: ProfileExtractionParameters) -> np.ndarray:
+def nesz_profiles_extractor(data: np.ndarray, params: ProfileExtractionParameters) -> np.ndarray:
     """Profiles extraction function for NESZ analysis.
 
     Parameters
@@ -316,45 +319,46 @@ def _nesz_profiles_extractor(data: np.ndarray, params: ProfileExtractionParamete
     np.ndarray
         nesz profile
     """
+
     # azimuth profile as a sum over range
     current_block_az_profile = np.nansum(data, axis=0)
 
     # if more than half of the block is populated with zeroes, discard the whole block
     if np.count_nonzero(current_block_az_profile) / current_block_az_profile.size < 0.5:
-        # TODO check if this exit strategy is ok
         return np.full(data.shape[0], np.nan)
-
-    # keeping only data where the current_block_az_profile is not 0
-    data = data[:, ~(current_block_az_profile == 0)]
-    #!!! NAN are an issue when using open cv filter2d
-    data[data == 0] = np.nan
 
     kernel = np.ones((params.filtering_kernel_size[0], params.filtering_kernel_size[1])) / (
         params.filtering_kernel_size[0] * params.filtering_kernel_size[1]
     )
-    # TODO check if speed up is much needed, if so this opencv snippets halves computation time (check values equality)
-    #!!! the issue with that is that there must be no NAN values in the original array (replace them with 0?)
-    # data = np.ascontiguousarray(data)
-    # data2 = cv2.filter2D(
-    #     src=data,
-    #     ddepth=-1,
-    #     kernel=kernel,
-    #     borderType=cv2.BORDER_CONSTANT,
-    # )
 
-    # TODO check if mode "valid" is absolutely necessary ("same" avoid reducing the profile length)
     # performing multi-looking 2D convolution (moving average 2D)
+    zero_rows_indexes = np.where(np.count_nonzero(data, axis=1) / data.shape[1] < 0.8)[0]
     data = convolve2d(
         data,
         kernel,
         mode="same",
     )
-    profile_db = convert_to_db(np.nanpercentile(abs(data), 1, axis=1))
-    return np.ma.masked_invalid(profile_db)
+
+    # hist_bins = int(np.mean([uu.size for uu in u]))
+    row_histograms = [np.histogram(row[np.isfinite(row)], bins="fd") for row in data]
+    peaks = np.array([(h[1][np.argmax(h[0])] + h[1][np.argmax(h[0]) + 1]) / 2 for h in row_histograms])
+    peaks[zero_rows_indexes] = np.nan
+    averaging_window_length = np.max([5, int(0.01 * peaks.size)])
+    # window length must be odd
+    averaging_window_length = (
+        averaging_window_length if averaging_window_length % 2 != 0 else averaging_window_length + 1
+    )
+    peaks = np.convolve(peaks, np.ones(averaging_window_length) / averaging_window_length, mode="same")
+    masking_invalid_convoluted_data = (averaging_window_length - 1) // 2
+    # removing convolution artifacts at profile borders
+    peaks[:masking_invalid_convoluted_data] = np.nan
+    peaks[-masking_invalid_convoluted_data:] = np.nan
+
+    return np.ma.masked_invalid(convert_to_db(peaks))
 
 
-def _gamma_profiles_extractor(data: np.ndarray, params: ProfileExtractionParameters) -> np.ndarray:
-    """Profiles extraction function for Gamma analysis.
+def average_elevation_profiles_extractor(data: np.ndarray, params: ProfileExtractionParameters) -> np.ndarray:
+    """Profiles extraction function for generic average elevation radiometric profiles analysis.
 
     Parameters
     ----------
@@ -366,7 +370,7 @@ def _gamma_profiles_extractor(data: np.ndarray, params: ProfileExtractionParamet
     Returns
     -------
     np.ndarray
-        gamma profile
+        average elevation profile
     """
     if params.smoothening_filter:
         log.info("Applying smoothening median filter...")
@@ -385,7 +389,7 @@ def _gamma_profiles_extractor(data: np.ndarray, params: ProfileExtractionParamet
     return np.ma.masked_invalid(profile_db)
 
 
-def _scalloping_profiles_extractor(data: np.ndarray, params: ProfileExtractionParameters) -> np.ndarray:
+def scalloping_profiles_extractor(data: np.ndarray, params: ProfileExtractionParameters) -> np.ndarray:
     """Profiles extraction function for Scalloping analysis.
 
     Parameters
@@ -445,21 +449,22 @@ def _nesz_config_manager(config: RadiometricProfilesConfig | None) -> Radiometri
     return config
 
 
-def _gamma_config_manager(config: RadiometricProfilesConfig | None) -> RadiometricProfilesConfig:
-    """Initializing default Gamma Profiles config if None is provided and check that histogram parameters are not None.
+def _average_elevation_config_manager(config: RadiometricProfilesConfig | None) -> RadiometricProfilesConfig:
+    """Initializing default Average Elevation Profiles config if None is provided and check that histogram parameters
+    are not None.
 
     Parameters
     ----------
     config : RadiometricProfilesConfig | None
-        input Gamma configuration
+        input average elevation profiles configuration
 
     Returns
     -------
     RadiometricProfilesConfig
-        updated/default/checked Gamma configuration
+        updated/default/checked average elevation profiles configuration
     """
     if config is None:
-        log.info("Configuration not provided. Using default Gamma Profiles configuration...")
+        log.info("Configuration not provided. Using default Average Elevation Profiles configuration...")
         config = RadiometricProfilesConfig()
 
     if config.profile_extraction_parameters.filtering_kernel_size is None:

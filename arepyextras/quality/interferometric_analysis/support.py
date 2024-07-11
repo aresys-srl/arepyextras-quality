@@ -130,11 +130,15 @@ def coherence_2d_histogram_computation_core(
     )
 
 
-def coherence_computation_core(data: np.ndarray, kernel_size: int | tuple[int, int] = 15) -> np.ndarray:
-    """Core algorithm to compute coherence by 2D convolution of input image with a boxcar filter.
+def coherence_computation_interferogram_core(data: np.ndarray, kernel_size: int | tuple[int, int] = 15) -> np.ndarray:
+    """Core algorithm to compute coherence by 2D convolution of input interferogram data with a boxcar filter.
 
     Coherence is defined as the ratio between the interferogram convolution with a boxcar filter of the complex data
     (with phase information) and the same convolution performed on the absolute of the input data.
+
+    .. math::
+
+        \\hat\\gamma = \\frac{\\sum_{i=1}^{N} u_i}{\\sum_{i=1}^{N} |u_i|}
 
     Parameters
     ----------
@@ -150,15 +154,7 @@ def coherence_computation_core(data: np.ndarray, kernel_size: int | tuple[int, i
         coherence array
     """
     # creating kernel "boxcar" from kernel_size
-    if isinstance(kernel_size, int):
-        # if a single value is provided, kernel is a square of side equal to kernel_size
-        kernel = np.ones((kernel_size, kernel_size))
-    else:
-        # otherwise creating a custom rectangular kernel from input shape
-        assert len(kernel) == 2
-        kernel = np.ones(kernel_size)
-    # normalizing kernel to remove gain
-    kernel_norm = kernel / np.sum(kernel)
+    kernel_norm = boxcar_kernel_setup(kernel_size)
 
     # computing the convolution on the phase of the image
     filtered_image = convolve2d(
@@ -177,3 +173,90 @@ def coherence_computation_core(data: np.ndarray, kernel_size: int | tuple[int, i
 
     # masking where phase > abs, aka ratio > 1
     return np.ma.masked_where(np.abs(coherence) > 1, coherence)
+
+
+def coherence_computation_co_registered_core(
+    data_1: np.ndarray, data_2: np.ndarray, kernel_size: int | tuple[int, int] = 15
+) -> np.ndarray:
+    """Core algorithm to compute coherence by 2D convolution of input co-registered products with a boxcar filter.
+
+    Coherence is defined as the ratio between the interferogram convolution with a boxcar filter of the complex data
+    (with phase information) and the square root of the product of the two input data squared and convoluted.
+
+    .. math::
+
+        \\hat\\gamma = \\frac{\\sum_{i=1}^{N} u_i v_i^*}{\\sqrt{\\sum_{i=1}^{N} |u_i|^2 \\sum_{i=1}^{N} |v_i|^2}}
+
+    where :math:`\\hat\\gamma` is the coherence, :math:`u` is the first product data and :math:`v` is the second co-registered
+    data.
+
+    Reference: `https://www.esa.int/esapub/tm/tm19/TM-19_ptC.pdf <https://www.esa.int/esapub/tm/tm19/TM-19_ptC.pdf>`_
+
+    Parameters
+    ----------
+    data_1 : np.ndarray
+        first co-registered product data
+    data_2 : np.ndarray
+        second co-registered product data
+    kernel_size : int | tuple[int, int], optional
+        size of the boxcar kernel, if an integer is provided, kernel will be a square with a side of that size, while
+        if the input is a tuple, that is the shape of the final kernel, by default 15
+
+    Returns
+    -------
+    np.ndarray
+        coherence array
+    """
+
+    # creating kernel "boxcar" from kernel_size
+    kernel_norm = boxcar_kernel_setup(kernel_size)
+
+    # computing the convolution on the phase of the image
+    filtered_image = convolve2d(
+        data_1 * data_2.conj(),
+        kernel_norm,
+        mode="same",
+    )
+    filtered_abs_image_1 = convolve2d(
+        np.abs(data_1) ** 2,
+        kernel_norm,
+        mode="same",
+    )
+    filtered_abs_image_2 = convolve2d(
+        np.abs(data_2) ** 2,
+        kernel_norm,
+        mode="same",
+    )
+
+    # coherence is obtained by dividing the phase convolution by the absolute convolution
+    coherence = np.ma.masked_invalid(filtered_image / np.sqrt(filtered_abs_image_1 * filtered_abs_image_2))
+
+    # masking where phase > abs, aka ratio > 1
+    return np.ma.masked_where(np.abs(coherence) > 1, coherence)
+
+
+def boxcar_kernel_setup(kernel_size: int | tuple[int, int]) -> np.ndarray:
+    """Creating the normalized boxcar kernel from its size.
+
+    Parameters
+    ----------
+    kernel_size : int | tuple[int, int]
+        kernel size
+
+    Returns
+    -------
+    np.ndarray
+        normalized boxcar kernel of the given size
+    """
+
+    # creating kernel "boxcar" from kernel_size
+    if isinstance(kernel_size, int):
+        # if a single value is provided, kernel is a square of side equal to kernel_size
+        kernel = np.ones((kernel_size, kernel_size))
+    else:
+        # otherwise creating a custom rectangular kernel from input shape
+        assert len(kernel_size) == 2
+        kernel = np.ones(kernel_size)
+
+    # normalizing kernel to remove gain
+    return kernel / np.sum(kernel)

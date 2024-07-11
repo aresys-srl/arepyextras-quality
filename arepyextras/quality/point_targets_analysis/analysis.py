@@ -378,7 +378,15 @@ def point_target_analysis(
                     )
                 )
                 graphs.append(
-                    ptdt.PointTargetGraphicalData(target=trgt, channel=channel, irf=graph_out_irf, rcs=graph_out_rcs)
+                    ptdt.PointTargetGraphicalData(
+                        target=trgt,
+                        channel=channel,
+                        swath=channel_data.swath_name,
+                        burst=burst,
+                        polarization=channel_data.polarization,
+                        irf=graph_out_irf,
+                        rcs=graph_out_rcs,
+                    )
                 )
 
     # storing values in a pandas dataframe

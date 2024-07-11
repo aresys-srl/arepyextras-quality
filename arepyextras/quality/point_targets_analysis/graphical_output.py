@@ -51,7 +51,7 @@ def irf_graphs(data_graph: ptdt.IRFGraphDataOutput, data_values: dict, label: st
     axes_ratio = az_ax_m.max() / rng_ax_m.max()
     extent = [az_ax_m[0], az_ax_m[-1], rng_ax_m[-1], rng_ax_m[0]]
     ax1.imshow(image_db, vmin=image_db.max() - 40, cmap="jet", extent=extent, aspect=axes_ratio)
-    ax1.plot(-data_values["azimuth_localization_error_[m]"], -data_values["slant_range_localization_error_[m]"], "ro")
+    ax1.plot(data_values["azimuth_localization_error_[m]"], data_values["slant_range_localization_error_[m]"], "ro")
     ax1.plot(az_ax_m, lobe_az * rng_ax_m)
     if np.isinf(lobe_rng):
         ax1.vlines(0, rng_ax_m[0], rng_ax_m[-1])

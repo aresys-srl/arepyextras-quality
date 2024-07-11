@@ -5,8 +5,8 @@
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from pathlib import Path
-from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,18 +18,36 @@ import arepyextras.quality.radiometric_analysis.custom_dataclasses as rdt
 log = logging.getLogger("quality_analysis")
 
 
-def radiometric_2D_hist_plot(data: rdt.RadiometricProfilesOutput, out_dir: Union[str, Path], title: str | None = None):
+class PlotModes(Enum):
+    """Overall profile computation mode"""
+
+    MEAN = "mean"
+    MIN = "min"
+
+
+def radiometric_2D_hist_plot(
+    data: rdt.RadiometricProfilesOutput,
+    out_dir: str | Path,
+    title: str | None = None,
+    plot_mode: str | PlotModes = PlotModes.MEAN,
+):
     """Radiometric profiles 2D histogram plot.
 
     Parameters
     ----------
     data : rdt.RadiometricProfilesOutput
         radiometric profiles output data
-    out_dir : Union[str, Path]
+    out_dir : str | Path
         output directory
+    title : str | None
+        plot title
+    plot_mode : str | PlotModes, optional
+        overall profile extraction mode, by default PlotModes.MEAN
     """
     graphs_dir = Path(out_dir).joinpath("graphs")
     graphs_dir.mkdir(exist_ok=True)
+
+    plot_mode = PlotModes(plot_mode)
 
     # figure plot
     if title is None:
@@ -50,7 +68,11 @@ def radiometric_2D_hist_plot(data: rdt.RadiometricProfilesOutput, out_dir: Union
         ],
     )
     ax.invert_yaxis()
-    mean_profile = np.nanmean(data.profiles, 0)
+    if plot_mode == PlotModes.MEAN:
+        mean_profile = np.nanmean(data.profiles, 0)
+    elif plot_mode == PlotModes.MIN:
+        np.ma.set_fill_value(data.profiles, np.nan)
+        mean_profile = np.nanmin(data.profiles.data, 0)
     if data.look_angles is not None:
         mean_profile_axis = np.nanmean(data.look_angles, 0)
     else:
@@ -76,6 +98,7 @@ def radiometric_2D_hist_plot(data: rdt.RadiometricProfilesOutput, out_dir: Union
         plt.xlabel("Azimuth Block Times [s]", fontdict={"size": 12})
     plt.ylabel("Power [dB]", fontdict={"size": 12})
     plt.title(title, fontdict={"size": 16, "weight": "bold"})
+    plt.grid(color="#7EB4B4", alpha=0.4)
 
     fig.savefig(graphs_dir.joinpath(title.lower().replace(" ", "_")).with_suffix(".png"))
     plt.close("all")

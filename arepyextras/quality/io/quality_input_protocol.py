@@ -19,6 +19,7 @@ from arepyextras.quality.core.generic_dataclasses import (
     SAROrbitDirection,
     SARPolarization,
     SARProjection,
+    SARRadiometricQuantity,
     SARSamplingFrequencies,
     SARSideLooking,
 )
@@ -167,6 +168,10 @@ class ChannelData(Protocol):
         """Lines per burst array, a value for each burst in the swath"""
 
     @property
+    def radiometric_quantity(self) -> SARRadiometricQuantity:
+        """Channel radiometric quantity"""
+
+    @property
     def pulse_latch_time(self) -> float:
         """Signal pulse latch time"""
 
@@ -257,7 +262,13 @@ class ChannelData(Protocol):
             list containing the burst association for each input point, None if no association was found
         """
 
-    def read_data(self, azimuth_index: int, range_index: int, cropping_size: tuple[int, int]) -> np.ndarray:
+    def read_data(
+        self,
+        azimuth_index: int,
+        range_index: int,
+        cropping_size: tuple[int, int],
+        output_radiometric_quantity: SARRadiometricQuantity,
+    ) -> np.ndarray:
         """Extracting the swath portion centered to the provided target position and of size cropping_size by
         cropping_size. Target position is provided via its azimuth and range indexes in the swath array.
 
@@ -275,11 +286,14 @@ class ChannelData(Protocol):
             index of range time in swath array
         cropping_size : tuple[int, int]
             size in pixel of the swath portion to be read (number of samples, number of lines)
+        output_radiometric_quantity : SARRadiometricQuantity
+            selected output radiometric quantity to convert the read data to, if needed
 
         Returns
         -------
         np.ndarray
             cropped swath array centered to the input target coordinates, data is provided with shape (samples, lines)
+            by default the output radiometric quantity is BETA_NOUGHT, unless specified otherwise
         """
 
     def get_location_data(

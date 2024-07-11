@@ -59,8 +59,8 @@ class Radiometric2DHistogramParameters:
 class ProfileExtractionParameters:
     """Dataclass to store configuration parameters for Radiometric Analysis functions"""
 
-    outlier_removal: bool = True
-    smoothening_filter: bool = True
+    outlier_removal: bool = False
+    smoothening_filter: bool = False
     filtering_kernel_size: tuple[int, int] | None = None
     outliers_percentile_boundaries: tuple[int, int] = (20, 90)
     outliers_kernel_size: tuple[int, int] = (5, 5)

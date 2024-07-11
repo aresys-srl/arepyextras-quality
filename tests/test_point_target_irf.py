@@ -12,7 +12,7 @@ from arepyextras.quality.point_targets_analysis.point_target_irf import (
 
 from . import _support as test_support
 
-# import _test_support as test_support
+# import _support as test_support
 
 
 class PointTargetIRFTest(unittest.TestCase):

@@ -107,7 +107,7 @@ def get_doppler_centroid(channel_data: ChannelData, azimuth_time: PreciseDateTim
 
     squint_angle = get_squint_angle(channel_data=channel_data, azimuth_time=azimuth_time, ground_point=ground_point)
     sensor_velocity = channel_data.trajectory.evaluate_first_derivatives(azimuth_time).squeeze()
-    sensor_velocity_norm = np.linalg.norm(sensor_velocity)
+    sensor_velocity_norm = np.linalg.norm(sensor_velocity, axis=-1)
     carrier_freq = channel_data.carrier_frequency / LIGHT_SPEED
 
     return 2.0 * carrier_freq * sensor_velocity_norm * np.sin(squint_angle)

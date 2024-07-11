@@ -47,8 +47,20 @@ Analysis Output
 ^^^^^^^^^^^^^^^
 
 Interferometric analysis output consists in a .nc NetCDF4 file containing the 2D coherence histograms computed along both
-directions. Also, a graphical plot can be obtained as output using the ``graphical_output.radiometric_2D_hist_plot``
-functionality showing the coherence map and the two histograms along the corresponding axes.
+directions. Also, graphical plots can be obtained as output using the ``graphical_output.radiometric_2D_hist_plot``
+functionality showing the coherence map (amplitude and phase available) and the two histograms along the corresponding axes.
+
+.. figure:: ../_static/images/coherence_magnitude.png
+   :align: center
+   :width: 1000
+
+   Interferometric coherence magnitude and 2D coherence histograms.
+
+.. figure:: ../_static/images/coherence_phase.png
+   :align: center
+   :width: 1000
+
+   Interferometric coherence phase and 2D coherence histograms.
 
 .. note::
 

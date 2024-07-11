@@ -13,6 +13,7 @@ import numpy as np
 
 from arepyextras.quality.interferometric_analysis.config import InterferometricConfig
 from arepyextras.quality.interferometric_analysis.custom_dataclasses import (
+    CoherenceGraphMode,
     InterferometricCoherence2DHistograms,
     InterferometricCoherenceOutput,
 )
@@ -22,7 +23,10 @@ log = logging.getLogger("quality_analysis")
 
 
 def generate_coherence_graphs(
-    data: InterferometricCoherenceOutput, output_dir: str | Path, config: InterferometricConfig | None = None
+    data: InterferometricCoherenceOutput,
+    output_dir: str | Path,
+    mode: str | CoherenceGraphMode = CoherenceGraphMode.MAGNITUDE,
+    config: InterferometricConfig | None = None,
 ) -> None:
     """Computing coherence graphs from Arepyextras Quality InterferometricCoherenceOutput coherence computation results.
 
@@ -32,6 +36,8 @@ def generate_coherence_graphs(
         InterferometricCoherenceOutput dataclass with results from coherence computation
     output_dir : str | Path
         output directory where to save the graph
+    mode : str | CoherenceGraphMode, optional
+        complex coherence quantity plot, by default CoherenceGraphMode.MAGNITUDE
     config : InterferometricConfig | None, optional
         interferometric configuration, by default None
     """
@@ -40,8 +46,9 @@ def generate_coherence_graphs(
         config.azimuth_blocks_number = 20
         config.range_blocks_number = 50
     tag = "_".join([data.swath, data.polarization.name])
+    mode = CoherenceGraphMode(mode)
     return coherence_graph_core(
-        coherence=data.coherence, histograms=data.coherence_histograms, tag=tag, output_dir=Path(output_dir)
+        coherence=data.coherence, histograms=data.coherence_histograms, tag=tag, output_dir=Path(output_dir), mode=mode
     )
 
 
@@ -50,6 +57,7 @@ def coherence_graph_core(
     histograms: InterferometricCoherence2DHistograms,
     output_dir: Path,
     tag: str = "",
+    mode: CoherenceGraphMode = CoherenceGraphMode.MAGNITUDE,
 ) -> None:
     """Generating interferogram coherence graph.
 
@@ -61,12 +69,22 @@ def coherence_graph_core(
         output directory where to save the graph
     tag : str, optional
         string tag to be added to the plot title and filename, by default ""
+    mode : CoherenceGraphMode, optional
+        complex coherence quantity plot, by default CoherenceGraphMode.MAGNITUDE
     """
 
-    coherence = np.abs(coherence)
+    if mode == CoherenceGraphMode.MAGNITUDE:
+        coherence = np.abs(coherence)
+    elif mode == CoherenceGraphMode.PHASE:
+        coherence = np.angle(coherence)
+
     coherence_bins_number = histograms.coherence_bin_edges.size - 1
 
-    filename = output_dir.joinpath("coherence_graph_" + tag + ".png")
+    if mode == CoherenceGraphMode.MAGNITUDE:
+        filename = output_dir.joinpath("coherence_magnitude_graph_" + tag + ".png")
+    elif mode == CoherenceGraphMode.PHASE:
+        filename = output_dir.joinpath("coherence_phase_graph_" + tag + ".png")
+
     log.info(f"Generating {filename.name}")
 
     # graph
@@ -103,7 +121,10 @@ def coherence_graph_core(
     # plot 2, lower left corner, whole coherence array
     ax2.imshow(coherence, interpolation="nearest", aspect="auto")
     ax2.invert_yaxis()
-    ax2.set_title("Coherence Map", fontsize=14)
+    if mode == CoherenceGraphMode.MAGNITUDE:
+        ax2.set_title("Coherence Magnitude Map", fontsize=14)
+    elif mode == CoherenceGraphMode.PHASE:
+        ax2.set_title("Coherence Phase Map", fontsize=14)
 
     # plot 3, lower right corner, coherence histogram along azimuth direction
     ax3.imshow(histograms.azimuth_histogram.T, aspect="auto", origin="lower")

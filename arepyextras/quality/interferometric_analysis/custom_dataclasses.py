@@ -5,10 +5,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
 
 from arepyextras.quality.core.generic_dataclasses import SARPolarization
+
+
+class CoherenceGraphMode(Enum):
+    """Coherence graphs complex coherence plot method"""
+
+    MAGNITUDE = "magnitude"
+    PHASE = "phase"
 
 
 @dataclass

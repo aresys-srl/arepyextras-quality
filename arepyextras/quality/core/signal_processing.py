@@ -225,7 +225,7 @@ def estimate_modulation_frequency(
 
         # 2D array
         n_rows, n_col = data.shape
-        temp_corr = np.zeros((3, n_col), dtype=np.complex_)
+        temp_corr = np.zeros((3, n_col), dtype=np.complex128)
         for col in range(n_col):
             # compute autocorrelation of the input signal storing resulting values only across the peak of the
             # correlation (max autocorrelation is at n_rows)
@@ -367,7 +367,7 @@ def get_frequency_axis(central_freqs: Union[float, np.ndarray], sampling_freq: f
     freq_axis = np.array(
         [((starting_freq - freq + sampling_freq / 2) % sampling_freq) - sampling_freq / 2 for freq in freq_shift]
     )
-    freq_axis = freq_axis + central_freqs
+    freq_axis = freq_axis + central_freqs.reshape(-1, 1)
 
     return freq_axis
 
@@ -379,11 +379,13 @@ def parabolic_interp_by_3_closest_samples(array: np.ndarray) -> tuple[float, flo
     the closest point after the peak.
 
     Considering a parabola written with explicit dependency from the position of its interpolated peak location in bins
+
     .. math::
 
         y(x)\\overset{\\Delta}{=}a(x-p)^2+b
 
     at the three samples nearest the peak, considering their bins as -1 (before), 0 (peak), 1 (after) we have:
+
     .. math::
 
         y(-1) = ap^2+2ap+a+b = \\alpha
@@ -391,6 +393,7 @@ def parabolic_interp_by_3_closest_samples(array: np.ndarray) -> tuple[float, flo
         y(1) = ap^2-2ap+a+b = \\gamma
 
     meaning that:
+
     .. math::
 
         \\alpha - \\gamma = 4ap

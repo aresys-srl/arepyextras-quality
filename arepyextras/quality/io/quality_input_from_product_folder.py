@@ -39,6 +39,7 @@ from arepyextras.quality.core.generic_dataclasses import (
     SAROrbitDirection,
     SARPolarization,
     SARProjection,
+    SARRadiometricQuantity,
     SARSamplingFrequencies,
     SARSideLooking,
 )
@@ -137,6 +138,8 @@ class ChannelManager:
         self._burst_info = self._channel_metadata.get_burst_info()
         self._pulse = self._channel_metadata.get_pulse()
         self._acquisition_time_line = self._channel_metadata.get_acquisition_time_line()
+        # TODO: read this from product metadata
+        self._radiometric_quantity = SARRadiometricQuantity.BETA_NOUGHT
 
         # re-arranging signal sampling frequencies
         self._sampling_constants = self._channel_metadata.get_sampling_constants()
@@ -455,6 +458,11 @@ class ChannelManager:
         return self._lines_per_burst_array
 
     @property
+    def radiometric_quantity(self) -> np.ndarray:
+        """Product radiometric quantity"""
+        return self._radiometric_quantity
+
+    @property
     def pulse_latch_time(self) -> float:
         """Signal pulse latch time"""
         return np.nan
@@ -643,6 +651,7 @@ class ChannelManager:
         azimuth_index: int,
         range_index: int,
         cropping_size: tuple[int, int] = (150, 150),
+        output_radiometric_quantity: SARRadiometricQuantity = SARRadiometricQuantity.BETA_NOUGHT,
     ) -> np.ndarray:
         """Extracting the swath portion centered to the provided target position and of size cropping_size by
         cropping_size. Target position is provided via its azimuth and range indexes in the swath array.
@@ -655,12 +664,15 @@ class ChannelManager:
             index of range time in swath array
         cropping_size : tuple[int, int], optional
             size in pixel of the swath portion to be read (number of samples, number of lines), by default (150, 150)
+        output_radiometric_quantity : SARRadiometricQuantity, optional
+            selected output radiometric quantity to convert the read data to, if needed,
+            by default SARRadiometricQuantity.BETA_NOUGHT
 
         Returns
         -------
         np.ndarray
             cropped swath array centered to the input target coordinates, data is provided with shape (samples, lines)
-
+            by default the output radiometric quantity is BETA_NOUGHT, unless specified otherwise
         Raises
         ------
         c_err.AzimuthExceedsBoundariesError
@@ -668,6 +680,10 @@ class ChannelManager:
         c_err.RangeExceedsBoundariesError
             range index exceeds swath boundaries
         """
+
+        # this is due to the fact that PF products are BETA but do not have an incidence angle poly to convert data
+        if self._radiometric_quantity != output_radiometric_quantity:
+            raise RuntimeError("Cannot convert radiometric quantity")
 
         # creating the target block identifier for partial swath reading
         # [start line, start sample, number of lines, number of samples]

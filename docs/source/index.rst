@@ -24,5 +24,5 @@ a protocol-compliant input object that can be generated starting from any kind o
 The following analyses have been implemented:
 
 - **Point Target Analysis**: Impulse Response Function (IRF), Radar Cross Section (RCS) and Localization Errors
-- **Radiometric Analysis**: Noise Equivalent Sigma-Zero (NESZ), Gamma-Zero (:math:`\gamma^0`) Profiles, Scalloping Profiles and custom radiometric profiles
+- **Radiometric Analysis**: Noise Equivalent Sigma-Zero (NESZ), Average Elevation Profiles, Scalloping Profiles and custom radiometric profiles
 - **Interferometric Analysis**: interferometric coherence analysis and graphical representation
