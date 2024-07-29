@@ -18,9 +18,3 @@ pip install arepyextras-quality[graphs]
 ```
 
 [graphs] is an optional dependency for generating plots and graphical outputs.
-
-or via conda:
-
-```shell
-conda install arepyextras-quality
-```
