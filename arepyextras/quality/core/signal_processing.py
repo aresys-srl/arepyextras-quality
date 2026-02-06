@@ -1184,3 +1184,89 @@ def compute_steering_doppler_frequency(
     antenna_modulation_rate = -doppler_rate * az_steering_rate_hz_s / (az_steering_rate_hz_s - doppler_rate)
 
     return antenna_modulation_rate * (azimuth_time - az_mid_burst_time)
+
+
+def cross_sample(array, center=None, cross_width=1, arm_length="full", centering="nearest"):
+    """
+    Extract a cross-shaped sample from a 2D NumPy array with controllable arm
+    thickness and arm length. The cross can extend to edges or stop at a fixed
+    distance from the center.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Input 2D array.
+    center : tuple[int, int], optional
+        (row, col) index for the cross center. Defaults to array center.
+    cross_width : int
+        Arm thickness (width) in pixels.
+    arm_length : {'full', int}
+        Length of each arm (from center to end).
+        'full' means arms extend to the array edges.
+    centering : {'nearest', 'floor', 'ceil'}, optional
+        How to pick center for even-sized arrays:
+            - 'nearest': rounds (n-1)/2 (default)
+            - 'floor': upper-left center bias
+            - 'ceil': lower-right center bias
+
+    Returns
+    -------
+    cross_values : np.ndarray
+        Array of same shape as input with zeros elsewhere and cross pixels preserved.
+    cross_points : list[tuple[int, int]]
+        List of (row, col) coordinates belonging to the cross.
+    """
+    if array.ndim != 2:
+        raise ValueError("Input array must be 2D")
+
+    nrows, ncols = array.shape
+
+    # Compute center
+    if center is None:
+        mid_r, mid_c = (nrows - 1) / 2, (ncols - 1) / 2
+        if centering == "nearest":
+            r0, c0 = int(round(mid_r)), int(round(mid_c))
+        elif centering == "floor":
+            r0, c0 = int(np.floor(mid_r)), int(np.floor(mid_c))
+        elif centering == "ceil":
+            r0, c0 = int(np.ceil(mid_r)), int(np.ceil(mid_c))
+        else:
+            raise ValueError("centering must be one of {'nearest','floor','ceil'}")
+    else:
+        r0, c0 = center
+
+    # Handle arm length
+    if arm_length == "full":
+        up_len = r0
+        down_len = nrows - r0 - 1
+        left_len = c0
+        right_len = ncols - c0 - 1
+    elif isinstance(arm_length, int):
+        up_len = down_len = left_len = right_len = arm_length
+    else:
+        raise ValueError("arm_length must be 'full' or an integer")
+
+    # Compute limits for thickness
+    r_half = cross_width // 2
+    c_half = cross_width // 2
+
+    mask = np.zeros_like(array, dtype=bool)
+
+    # Vertical arm (column-aligned)
+    r_top = max(0, r0 - up_len)
+    r_bottom = min(nrows, r0 + down_len + 1)
+    c_min = max(0, c0 - c_half)
+    c_max = min(ncols, c0 + c_half + (cross_width % 2))
+    mask[r_top:r_bottom, c_min:c_max] = True
+
+    # Horizontal arm (row-aligned)
+    c_left = max(0, c0 - left_len)
+    c_right = min(ncols, c0 + right_len + 1)
+    r_min = max(0, r0 - r_half)
+    r_max = min(nrows, r0 + r_half + (cross_width % 2))
+    mask[r_min:r_max, c_left:c_right] = True
+
+    cross_points = np.argwhere(mask)
+    cross_values = np.where(mask, array, 0)
+
+    return cross_values, [tuple(p) for p in cross_points]
